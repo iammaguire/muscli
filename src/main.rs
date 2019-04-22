@@ -7,7 +7,7 @@ use termion::raw::{ RawTerminal, IntoRawMode };
 use termion::event::Key;
 use tui::Terminal;
 use tui::backend::TermionBackend;
-use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge };
+use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart };
 use tui::layout::{ Layout, Constraint, Direction };
 use tui::style::{ Color, Modifier, Style};
 use id3::{ Tag };
@@ -167,22 +167,31 @@ fn main() -> Result<(), failure::Error> {
                 .highlight_style(song_list_style.modifier(Modifier::BOLD))
                 .render(&mut f, chunks[chunks.len() - 1]);
             if playing_song != None {
-                let time_ms = playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32;
-                let time_s: u32 = time_ms / 1000;
-                let time_m: u32 = time_s / 60;
+                let time_ms = playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as f32;
+                let time_s = time_ms / 1000.0;
+                let time_m = time_s / 60.0;
+                let spectrum_data = playing_channel.as_ref().unwrap().get_wave_data(50, 0).unwrap();
+                let mut spectrum_tuples: Vec<(&str, u64)> = Vec::new();
+                for &s in spectrum_data.iter() { spectrum_tuples.push(("", (s.abs() * 100.0 + 1.0) as u64)); }
+
                 let player_chunks = Layout::default()
                     .constraints([Constraint::Percentage(91), Constraint::Percentage(9)].as_ref())
                     .direction(Direction::Vertical)
                     .split(chunks[0]);
-                Block::default()
-                    .title(&format!("{}", default_playlist.songs[playing_song.unwrap()].name))
-                    .borders(Borders::ALL)
+                BarChart::default()
+                    .block(Block::default().title(&format!("{}", default_playlist.songs[playing_song.unwrap()].name)).borders(Borders::ALL))
+                    .bar_width(1)
+                    .bar_gap(1)
+                    .style(Style::default().fg(Color::White))
+                    .label_style(Style::default().fg(Color::White))
+                    .data(&spectrum_tuples[..])
+                    .max(100)
                     .render(&mut f, player_chunks[0]);
                 Gauge::default()
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
-                    .percent((time_ms as f32 / playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
-                    .label(&format!("{}{}:{}{}", if time_m < 10 { "0" } else { "" }, time_m, if time_s < 10 { "0" } else { "" }, time_s))
+                    .percent((time_ms / playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
+                    .label(&format!("{}{}:{}{}", if time_m < 10.0 { "0" } else { "" }, time_m as u32, if time_s < 10.0 { "0" } else { "" }, time_s as u32))
                     .render(&mut f, player_chunks[1]);
             }
         }).unwrap();
