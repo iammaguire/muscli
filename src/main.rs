@@ -1,25 +1,25 @@
+extern crate rfmod;
 mod util { pub mod event; }
 
-use std::fs;
 use std::env;
 use std::io;
 use termion::raw::{ RawTerminal, IntoRawMode };
 use termion::event::Key;
 use tui::Terminal;
 use tui::backend::TermionBackend;
-use tui::widgets::{ Widget, Block, Borders, SelectableList };
+use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge };
 use tui::layout::{ Layout, Constraint, Direction };
-use tui::style::{Color, Modifier, Style};
-use id3::{Tag, Version};
+use tui::style::{ Color, Modifier, Style};
+use id3::{ Tag };
 use glob::glob;
-use util::event::{Event, Events};
+use util::event::{ Event, Events };
 
 struct Song {
     name: String,
     path: String,
     artist: String,
     album: String,
-    length: u32
+    length: u32,
 }
 
 struct Playlist {
@@ -36,13 +36,13 @@ fn build_playlist_from_directory(path: &str) -> Result<Playlist, io::Error> {
     for entry in glob(&glob_path).expect("Failed to read glob pattern.") {
         match entry {
             Ok(path) => {
-                let mut tag = Tag::read_from_path(path.to_str().unwrap()).unwrap();
+                let tag = Tag::read_from_path(path.to_str().unwrap()).unwrap();
                 let song = Song { 
                     name: String::from(match tag.title() { Some(s) => s, None => "" }), 
                     path: String::from(match path.to_str() { Some(s) => s, None => "" }),
                     artist: String::from(match tag.artist() { Some(s) => s, None => "" }),
                     album: String::from(match tag.album() { Some(s) => s, None => "" }),
-                    length: match tag.duration() { Some(i) => i, None => 0 }
+                    length: match tag.duration() { Some(i) => i, None => 0 },
                 };
                 total_length += song.length;
                 songs.push(song);
@@ -59,43 +59,45 @@ fn main() -> Result<(), failure::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut path = &args[1];
+    let path = &args[1];
     let events = Events::new();
 
-    let default_playlist = build_playlist_from_directory(&path).unwrap();
-    let mut selected_song: Option<usize> = None;
-    let mut song_list = Vec::new();
-    for s in &default_playlist.songs { song_list.push(&s.name); }
+    let mut default_playlist = build_playlist_from_directory(&path).unwrap();
+    let mut selected_song: Option<usize> = None; // song currently selected (may not be playing) in selectable list
+    let mut playing_song: Option<usize> = None; // song currently playing 
+    let mut playing_song_handle: Option<rfmod::Sound> = None;
+    let mut playing_channel: Option<rfmod::Channel> = None;
+    let mut song_list: Vec<String> = Vec::new(); 
+    let mut rebuild_song_list = false;
+
+    let searcher_layout = vec![Constraint::Percentage(100)];
+    let player_layout = vec![Constraint::Percentage(50), Constraint::Percentage(50)];
+
+    let fmod = match rfmod::Sys::new() {
+        Ok(f) => f,
+        Err(e) => {
+            panic!("Error code : {:?}", e);
+        }
+    };
+
+    match fmod.init() {
+        rfmod::Status::Ok => {}
+        e => {
+            panic!("FmodSys.init failed : {:?}", e);
+        }
+    };
+
+    for s in &default_playlist.songs { song_list.push(s.name.clone()); }
     terminal.hide_cursor()?;
 
     loop {
-        // Draw UI
-        terminal.draw(|mut f| {
-            let chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(30), Constraint::Percentage(70)].as_ref())
-                .split(f.size());
-            SelectableList::default()
-                .block(Block::default().borders(Borders::ALL).title(&format!("Playlist: {}", default_playlist.name)))
-                .items(&song_list)
-                .select(selected_song)
-                .style(Style::default())
-                .highlight_symbol(">")
-                .render(&mut f, chunks[1]);
-            Block::default()
-                .title(&format!("Artist: {}", default_playlist.songs[0].artist))
-                .borders(Borders::ALL)
-                .render(&mut f, chunks[0]);
-        });
-
         // User input
         match events.next()? {
             Event::Input(input) => match input {
                 Key::Char('q') => {
+                    playing_song_handle.unwrap();
+                    playing_channel.unwrap();
                     break;
-                }
-                Key::Left => {
-                    selected_song = None;
                 }
                 Key::Down => {
                     selected_song = if let Some(selected) = selected_song {
@@ -106,7 +108,8 @@ fn main() -> Result<(), failure::Error> {
                         }
                     } else {
                         Some(0)
-                    }
+                    };
+                    rebuild_song_list = true;
                 }
                 Key::Up => {
                     selected_song = if let Some(selected) = selected_song {
@@ -117,6 +120,20 @@ fn main() -> Result<(), failure::Error> {
                         }
                     } else {
                         Some(0)
+                    };
+                    rebuild_song_list = true;
+                }
+                Key::Char(' ') => {
+                    if selected_song != None {
+                        playing_song = selected_song;
+                        playing_song_handle = match fmod.create_sound(&default_playlist.songs[playing_song.unwrap()].path, None, None) {
+                            Ok(s) => Some(s),
+                            Err(err) => panic!("Error code: {:?}", err)
+                        };
+                        playing_channel = match playing_song_handle.as_ref().unwrap().play() {
+                            Ok(c) => Some(c),
+                            Err(err) => panic!("Play: {:?}", err)
+                        };
                     }
                 }
                 _ => {}
@@ -125,6 +142,50 @@ fn main() -> Result<(), failure::Error> {
                 
             }
         }
+
+        if rebuild_song_list && selected_song != None {
+            song_list.clear();
+            for (idx, s) in default_playlist.songs.iter().enumerate() { 
+                if idx == selected_song.unwrap() { song_list.push(format!("> {}", &s.name).clone()); }
+                else { song_list.push(s.name.clone()); } 
+            }
+            rebuild_song_list = false;
+        }
+
+        // Draw UI
+        terminal.draw(|mut f| {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(match playing_song { Some(s) => player_layout.as_ref(), None => searcher_layout.as_ref() })
+                .split(f.size());
+            let song_list_style = Style::default().fg(Color::White);
+            SelectableList::default()
+                .block(Block::default().borders(Borders::ALL).title(&format!("Playlist: {}", default_playlist.name)))
+                .items(&song_list)
+                .select(playing_song)
+                .style(song_list_style)
+                .highlight_style(song_list_style.modifier(Modifier::BOLD))
+                .render(&mut f, chunks[chunks.len() - 1]);
+            if playing_song != None {
+                let time_ms = playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32;
+                let time_s: u32 = time_ms / 1000;
+                let time_m: u32 = time_s / 60;
+                let player_chunks = Layout::default()
+                    .constraints([Constraint::Percentage(91), Constraint::Percentage(9)].as_ref())
+                    .direction(Direction::Vertical)
+                    .split(chunks[0]);
+                Block::default()
+                    .title(&format!("{}", default_playlist.songs[playing_song.unwrap()].name))
+                    .borders(Borders::ALL)
+                    .render(&mut f, player_chunks[0]);
+                Gauge::default()
+                    .block(Block::default().borders(Borders::ALL))
+                    .style(Style::default().fg(Color::White))
+                    .percent((time_ms as f32 / playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
+                    .label(&format!("{}{}:{}{}", if time_m < 10 { "0" } else { "" }, time_m, if time_s < 10 { "0" } else { "" }, time_s))
+                    .render(&mut f, player_chunks[1]);
+            }
+        }).unwrap();
     }
     Ok(())
 }
