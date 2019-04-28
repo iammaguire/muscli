@@ -27,28 +27,25 @@ struct Playlist {
     length: u32
 }
 
-pub struct LocalPlayer<'a> {
-    config: &'a Config,
+pub struct LocalPlayer {
+    config: Config,
     playlist: Playlist,
     selected_song: Option<usize>,
     playing_song: Option<usize>,
     song_list: Vec<String>,
     rebuild_song_list: bool,
-    playing_song_handle: rfmod::Sound,
-    playing_channel: rfmod::Channel,
+    playing_song_handle: Option<rfmod::Sound>,
+    playing_channel: Option<rfmod::Channel>,
     num_spectrum_bars: usize,
-    spectrum_data_last: Vec<f32>,
-    fmod: &'a Sys
+    spectrum_data_last: Vec<f32>
 }
 
-impl<'a> LocalPlayer<'a> {
-    pub fn new(config: &'a Config, fmod: &'a rfmod::Sys) -> LocalPlayer<'a> {
+impl LocalPlayer {
+    pub fn new(config: Config) -> LocalPlayer {
         let path = "/home/meet/Music/Logic/The_Incredible_True_Story/";
         let mut song_list = Vec::new();
         let default_playlist = LocalPlayer::build_playlist_from_directory(&path).unwrap();
-        let (mut playing_song_handle, mut playing_channel) = LocalPlayer::play_song(fmod, &default_playlist.songs[0].path);
         for s in &default_playlist.songs { song_list.push(s.name.clone()); }
-        playing_channel.set_paused(true);
 
         LocalPlayer {
             config: config,
@@ -57,15 +54,14 @@ impl<'a> LocalPlayer<'a> {
             playing_song: None,
             song_list: song_list,
             rebuild_song_list: false,
-            playing_song_handle: playing_song_handle,
-            playing_channel: playing_channel,
+            playing_song_handle: None,
+            playing_channel: None,
             num_spectrum_bars: 70,
             spectrum_data_last: vec![0f32; 70],
-            fmod: fmod
         }
     }
 
-    fn build_playlist_from_directory(path: &str) -> Result<Playlist, io::Error> {
+    fn build_playlist_from_directory(path: &str) -> Result<Playlist, failure::Error> {
         let mut glob_path = String::from(path);
         let mut songs: Vec<Song> = Vec::new();
         let mut total_length = 0;
@@ -104,11 +100,11 @@ impl<'a> LocalPlayer<'a> {
     }
 }
 
-impl<'a> Player for LocalPlayer<'a> {
-    fn input(&mut self, key: Key) {
+impl Player for LocalPlayer {
+    fn input(&mut self, key: Key, fmod: &Sys) {
         match key {
             Key::Char('c') => {
-                self.playing_channel.set_paused(true);
+                self.playing_channel.as_ref().unwrap().set_paused(true);
                 self.playing_song = None;
             }
             Key::Down => {
@@ -137,23 +133,23 @@ impl<'a> Player for LocalPlayer<'a> {
             }
             Key::Char('a') => {
                 if self.playing_song != None {
-                    self.playing_channel.set_position(cmp::max(0, self.playing_channel.get_position(rfmod::TIMEUNIT_MS).unwrap() as i32 - 10000) as usize, rfmod::TIMEUNIT_MS);
+                    self.playing_channel.as_ref().unwrap().set_position(cmp::max(0, self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as i32 - 10000) as usize, rfmod::TIMEUNIT_MS);
                 }
             }
             Key::Char('s') => {
                 if self.playing_song != None {
-                    self.playing_channel.set_position(self.playing_channel.get_position(rfmod::TIMEUNIT_MS).unwrap() + 10000, rfmod::TIMEUNIT_MS);
+                    self.playing_channel.as_ref().unwrap().set_position(self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() + 10000, rfmod::TIMEUNIT_MS);
                 }                    
             }
             Key::Char(' ') => {
                 if self.selected_song != None {
                     if self.selected_song != self.playing_song {
                         self.playing_song = self.selected_song;
-                        let (phandle, pchannel) = LocalPlayer::play_song(self.fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
-                        self.playing_song_handle = phandle;
-                        self.playing_channel = pchannel;
+                        let (phandle, pchannel) = LocalPlayer::play_song(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
+                        self.playing_song_handle = Some(phandle);
+                        self.playing_channel = Some(pchannel);
                     } else {
-                        self.playing_channel.set_paused(!self.playing_channel.get_paused().unwrap());
+                        self.playing_channel.as_ref().unwrap().set_paused(!self.playing_channel.as_ref().unwrap().get_paused().unwrap());
                     }
                 }
             }
@@ -161,7 +157,7 @@ impl<'a> Player for LocalPlayer<'a> {
         }
     }
 
-    fn tick(&mut self) {
+    fn tick(&mut self, fmod: &Sys) {
         // draw > in list
         if self.rebuild_song_list && self.selected_song != None {
             self.song_list.clear();
@@ -174,11 +170,11 @@ impl<'a> Player for LocalPlayer<'a> {
 
         // go to next song
         if self.playing_song != None {
-            if self.playing_channel.get_position(rfmod::TIMEUNIT_MS).unwrap() as u32 >= self.playing_song_handle.get_length(rfmod::TIMEUNIT_MS).unwrap() - 1 {
+            if self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32 >= self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() - 1 {
                 self.playing_song = if self.playing_song.unwrap() >= self.song_list.len() - 1 { Some(0) } else { Some(self.playing_song.unwrap() + 1) };
-                let (phandle, pchannel) = LocalPlayer::play_song(self.fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
-                self.playing_song_handle = phandle;
-                self.playing_channel = pchannel;
+                let (phandle, pchannel) = LocalPlayer::play_song(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
+                self.playing_song_handle = Some(phandle);
+                self.playing_channel = Some(pchannel);
             }
         }
     }
@@ -197,10 +193,10 @@ impl<'a> Player for LocalPlayer<'a> {
             .highlight_style(song_list_style.modifier(Modifier::BOLD))
             .render(f, chunks[chunks.len() - 1]);
         if self.playing_song != None {
-            let time_ms = self.playing_channel.get_position(rfmod::TIMEUNIT_MS).unwrap() as f32;
+            let time_ms = self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as f32;
             let time_s = time_ms / 1000.0 % 60.0;
             let time_m = time_ms / 1000.0 / 60.0;
-            let spectrum_data = &self.playing_channel.get_wave_data(self.num_spectrum_bars, 1).unwrap();
+            let spectrum_data = &self.playing_channel.as_ref().unwrap().get_wave_data(self.num_spectrum_bars, 1).unwrap();
             let mut spectrum_tuples: Vec<(&str, u64)> = Vec::new();
             for (idx, &s) in spectrum_data.iter().enumerate() { 
                 let value = (self.spectrum_data_last[idx].abs() + s.abs()) / 2.0 * 100.0 + 2.0;
@@ -225,13 +221,13 @@ impl<'a> Player for LocalPlayer<'a> {
                 .max(100)
                 .render(f, player_chunks[0]);
             Paragraph::new(info_text.iter())
-                .block(Block::default().title(&format!("{}{}", self.playlist.songs[self.playing_song.unwrap()].name, if self.playing_channel.get_paused().unwrap() { " PAUSED" } else { "" })).borders(Borders::ALL))
+                .block(Block::default().title(&format!("{}{}", self.playlist.songs[self.playing_song.unwrap()].name, if self.playing_channel.as_ref().unwrap().get_paused().unwrap() { " PAUSED" } else { "" })).borders(Borders::ALL))
                 .alignment(Alignment::Left)
                 .render(f, player_chunks[1]);
             Gauge::default()
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::White))
-                .percent((time_ms / self.playing_song_handle.get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
+                .percent((time_ms / self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
                 .label(&format!("{}{}:{}{}", if time_m < 10.0 { "0" } else { "" }, time_m as u32, if time_s < 10.0 { "0" } else { "" }, time_s as u32))
                 .render(f, player_chunks[2]);
         }

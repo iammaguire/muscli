@@ -29,7 +29,7 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             exit_key: Key::Char('q'),
-            tick_rate: Duration::from_millis(100),
+            tick_rate: Duration::from_millis(75),
         }
     }
 }
