@@ -1,2 +1,2 @@
 
-                        .labels(&["0.0", "5.0", "10.0"]))
+                let player_chunks = Layout::default()
