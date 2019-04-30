@@ -2,23 +2,18 @@ use pandora_rs2::Pandora;
 use pandora_rs2::stations::Station;
 use pandora_rs2::playlist::Track;
 use rfmod::Sys;
-use std::option;
 use std::io;
 use std::fs::File;
 use std::process::Command;
 use termion::event::Key;
-use tui::Terminal;
 use tui::backend::Backend;
 use tui::layout::{ Rect, Layout, Constraint, Direction, Alignment };
-use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text, Tabs };
+use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text };
 use tui::terminal::Frame;
 use tui::style::{ Color, Modifier, Style};
 use tempdir::TempDir;
 use super::player::Player;
-use super::LocalPlayer;
-use super::Config;
-
-use std::{thread, time};
+use super::{ Config, MediaUI, LocalPlayer };
 
 pub struct PandoraPlayer {
     config: Config,
@@ -35,8 +30,7 @@ pub struct PandoraPlayer {
     playing_song_handle: Option<rfmod::Sound>,
     playing_channel: Option<rfmod::Channel>,
     playing_song_file: Option<File>,
-    num_spectrum_bars: usize,
-    spectrum_data_last: Vec<f32>
+    media_ui: MediaUI
 }
 
 impl PandoraPlayer {
@@ -60,8 +54,7 @@ impl PandoraPlayer {
             playing_song_handle: None,
             playing_channel: None,
             playing_song_file: None,
-            num_spectrum_bars: 70,
-            spectrum_data_last: vec![0f32; 70]
+            media_ui: MediaUI::new()
         }
     }
 
@@ -69,7 +62,7 @@ impl PandoraPlayer {
         let target = track.track_audio.as_ref().expect("Couldn't unwrap track_audio").high_quality.audio_url.clone();
         let mut response = reqwest::get(&target)?;
 
-        let (mut dest, mut fname) = {
+        let (mut dest, fname) = {
             let fname = response
                 .url()
                 .path_segments()
@@ -94,65 +87,24 @@ impl PandoraPlayer {
 
 impl Player for PandoraPlayer {
     fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(match self.viewing_stations { false => vec![Constraint::Percentage(50), Constraint::Percentage(50)], true => vec![Constraint::Percentage(100)] })
-            .split(chunk);
-        let select_list_style = Style::default().fg(Color::White);
         if self.viewing_stations {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(vec![Constraint::Percentage(100)])
+                .split(chunk);
             SelectableList::default()
                 .block(Block::default().borders(Borders::ALL).title(&format!("Station List")))
                 .items(&self.stations_names)
                 .select(self.selected_idx)
-                .style(select_list_style)
+                .style(Style::default().fg(Color::White))
                 .render(f, chunks[0]);
         } else if let Some(playlist_titles) = self.current_playlist_titles.as_ref() {
-            if self.selected_idx != None {
-                SelectableList::default()
-                    .block(Block::default().borders(Borders::ALL).title(&format!("Track List")))
-                    .items(playlist_titles)
-                    .select(self.selected_idx)
-                    .style(select_list_style)
-                    .highlight_style(select_list_style.modifier(Modifier::BOLD))
-                    .render(f, chunks[1]);
-                
-                let time_ms = self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as f32;
-                let time_s = time_ms / 1000.0 % 60.0;
-                let time_m = time_ms / 1000.0 / 60.0;
-                let spectrum_data = &self.playing_channel.as_ref().unwrap().get_wave_data(self.num_spectrum_bars, 1).unwrap();
-                let mut spectrum_tuples: Vec<(&str, u64)> = Vec::new();
-                for (idx, &s) in spectrum_data.iter().enumerate() { 
-                    let value = (self.spectrum_data_last[idx].abs() + s.abs()) / 2.0 * 100.0 + 2.0;
-                    spectrum_tuples.push(("", value as u64)); 
-                    self.spectrum_data_last[idx] = s;
-                }
-
-                let info_text = [
-                    Text::raw("Artist: \nDate: \nLength: \n# plays: "),
-                ];
-                
-                let player_chunks = Layout::default()
-                    .constraints([Constraint::Percentage(40), Constraint::Percentage(50), Constraint::Percentage(10)].as_ref())
-                    .direction(Direction::Vertical)
-                    .split(chunks[0]);
-                BarChart::default()
-                    .block(Block::default().borders(Borders::ALL))
-                    .bar_width(1)
-                    .bar_gap(1)
-                    .style(Style::default().fg(Color::White))
-                    .data(&spectrum_tuples)
-                    .max(100)
-                    .render(f, player_chunks[0]);
-                Paragraph::new(info_text.iter())
-                    .block(Block::default().title(&format!("{}{}", playlist_titles[self.selected_idx.unwrap()], if false { " PAUSED" } else { "" })).borders(Borders::ALL))
-                    .alignment(Alignment::Left)
-                    .render(f, player_chunks[1]);
-                Gauge::default()
-                    .block(Block::default().borders(Borders::ALL))
-                    .style(Style::default().fg(Color::White))
-                    .percent((time_ms / self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
-                    .label(&format!("{}{}:{}{}", if time_m < 10.0 { "0" } else { "" }, time_m as u32, if time_s < 10.0 { "0" } else { "" }, time_s as u32))
-                    .render(f, player_chunks[2]);
+            if let Some(idx) = self.selected_idx {
+                self.media_ui.draw(f, chunk, self.stations_names[idx].as_str(), 
+                                             playlist_titles.to_vec(), 
+                                             idx, 
+                                             self.playing_song_handle.as_ref().unwrap(), 
+                                             self.playing_channel.as_ref().unwrap());
             }
         }
     }
@@ -166,7 +118,6 @@ impl Player for PandoraPlayer {
         match key {
             Key::Char(' ') => {
                 if self.viewing_stations {
-                    let selected_station = &self.stations_names[self.selected_idx.unwrap()];
                     let station_handle = self.handle.stations();
                     if let Ok(s) = station_handle.playlist(&self.stations[self.selected_idx.unwrap()]).list() {
                         self.current_playlist = Some(s);

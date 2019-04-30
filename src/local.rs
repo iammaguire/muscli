@@ -2,16 +2,15 @@ use termion::event::Key;
 use rfmod::Sys;
 use id3::Tag;
 use glob::glob;
-use std::io;
 use std::cmp;
-use tui::Terminal;
 use tui::backend::Backend;
-use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text, Tabs };
+use tui::widgets::{ Widget, Block, Borders, SelectableList };
 use tui::style::{ Color, Modifier, Style};
-use tui::layout::{ Rect, Layout, Constraint, Direction, Alignment };
+use tui::layout::{ Rect, Layout, Constraint, Direction };
 use tui::terminal::Frame;
 use super::player::Player;
 use super::Config;
+use super::MediaUI;
 
 struct Song {
     name: String,
@@ -36,8 +35,7 @@ pub struct LocalPlayer {
     rebuild_song_list: bool,
     playing_song_handle: Option<rfmod::Sound>,
     playing_channel: Option<rfmod::Channel>,
-    num_spectrum_bars: usize,
-    spectrum_data_last: Vec<f32>
+    media_ui: MediaUI
 }
 
 impl LocalPlayer {
@@ -56,8 +54,7 @@ impl LocalPlayer {
             rebuild_song_list: false,
             playing_song_handle: None,
             playing_channel: None,
-            num_spectrum_bars: 70,
-            spectrum_data_last: vec![0f32; 70],
+            media_ui: MediaUI::new()
         }
     }
 
@@ -180,56 +177,24 @@ impl Player for LocalPlayer {
     }
 
     fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(match self.playing_song { Some(s) => vec![Constraint::Percentage(50), Constraint::Percentage(50)], None => vec![Constraint::Percentage(100)] })
-            .split(chunk);
-        let song_list_style = Style::default().fg(Color::White);
-        SelectableList::default()
-            .block(Block::default().borders(Borders::ALL).title(&format!("Playlist: {}", self.playlist.name)))
-            .items(&self.song_list)
-            .select(self.playing_song)
-            .style(song_list_style)
-            .highlight_style(song_list_style.modifier(Modifier::BOLD))
-            .render(f, chunks[chunks.len() - 1]);
-        if self.playing_song != None {
-            let time_ms = self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as f32;
-            let time_s = time_ms / 1000.0 % 60.0;
-            let time_m = time_ms / 1000.0 / 60.0;
-            let spectrum_data = &self.playing_channel.as_ref().unwrap().get_wave_data(self.num_spectrum_bars, 1).unwrap();
-            let mut spectrum_tuples: Vec<(&str, u64)> = Vec::new();
-            for (idx, &s) in spectrum_data.iter().enumerate() { 
-                let value = (self.spectrum_data_last[idx].abs() + s.abs()) / 2.0 * 100.0 + 2.0;
-                spectrum_tuples.push(("", value as u64)); 
-                self.spectrum_data_last[idx] = s;
-            }
-
-            let info_text = [
-                Text::raw("Artist: \nDate: \nLength: \n# plays: "),
-            ];
-            
-            let player_chunks = Layout::default()
-                .constraints([Constraint::Percentage(40), Constraint::Percentage(50), Constraint::Percentage(10)].as_ref())
-                .direction(Direction::Vertical)
-                .split(chunks[0]);
-            BarChart::default()
-                .block(Block::default().borders(Borders::ALL))
-                .bar_width(1)
-                .bar_gap(1)
+        if let Some(idx) = self.playing_song {
+            self.media_ui.draw(f, chunk, self.playlist.name.as_str(), 
+                                         self.song_list.clone(), 
+                                         idx, 
+                                         self.playing_song_handle.as_ref().unwrap(), 
+                                         self.playing_channel.as_ref().unwrap());
+        } else {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(vec![Constraint::Percentage(100)])
+                .split(chunk);
+            SelectableList::default()
+                .block(Block::default().borders(Borders::ALL).title(&format!("Playlist: {}", self.playlist.name)))
+                .items(&self.song_list)
+                .select(self.playing_song)
                 .style(Style::default().fg(Color::White))
-                .data(&spectrum_tuples)
-                .max(100)
-                .render(f, player_chunks[0]);
-            Paragraph::new(info_text.iter())
-                .block(Block::default().title(&format!("{}{}", self.playlist.songs[self.playing_song.unwrap()].name, if self.playing_channel.as_ref().unwrap().get_paused().unwrap() { " PAUSED" } else { "" })).borders(Borders::ALL))
-                .alignment(Alignment::Left)
-                .render(f, player_chunks[1]);
-            Gauge::default()
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::White))
-                .percent((time_ms / self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() as f32 * 100.0) as u16)
-                .label(&format!("{}{}:{}{}", if time_m < 10.0 { "0" } else { "" }, time_m as u32, if time_s < 10.0 { "0" } else { "" }, time_s as u32))
-                .render(f, player_chunks[2]);
+                .highlight_style(Style::default().fg(Color::White).modifier(Modifier::BOLD))
+                .render(f, chunks[chunks.len() - 1]);
         }
     }
 }

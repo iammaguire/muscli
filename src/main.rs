@@ -14,25 +14,22 @@ pub mod pandora;
 pub mod local;
 pub mod player;
 
-use std::env;
 use std::io;
 use std::fs::File;
-use std::path::Path;
-use std::iter;
 use rfmod::Sys;
-use termion::raw::{ RawTerminal, IntoRawMode };
+use termion::raw::{ IntoRawMode };
 use termion::event::Key;
 use tui::Terminal;
 use tui::backend::{ Backend, TermionBackend };
-use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text, Tabs };
-use tui::layout::{ Rect, Layout, Constraint, Direction, Alignment };
-use tui::style::{ Color, Modifier, Style};
+use tui::widgets::{ Widget, Block, Borders, Tabs };
+use tui::layout::{ Rect, Layout, Constraint, Direction };
+use tui::style::{ Modifier, Style};
 use tui::terminal::Frame;
 use event::{ Event, Events };
 use util::TabsState;
 use pandora::PandoraPlayer;
 use local::LocalPlayer;
-use player::Player;
+use player::{ Player, MediaUI };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
