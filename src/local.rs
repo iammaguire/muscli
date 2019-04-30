@@ -87,7 +87,7 @@ impl LocalPlayer {
         Ok(Playlist { name: songs[0].album.clone(), songs: songs, length: total_length })
     }
 
-    fn play_song(fmod: &rfmod::Sys, path: &str) -> (rfmod::Sound, rfmod::Channel) {
+    pub fn play_song(fmod: &rfmod::Sys, path: &str) -> (rfmod::Sound, rfmod::Channel) {
         let playing_song_handle = match fmod.create_sound(path, None, None) {
             Ok(s) => s,
             Err(err) => panic!("Error code: {:?}", err)

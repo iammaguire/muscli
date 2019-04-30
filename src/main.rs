@@ -6,6 +6,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate dirs;
 extern crate base64;
+extern crate reqwest; 
 
 pub mod util;
 pub mod event;
@@ -135,7 +136,7 @@ fn main() -> Result<(), failure::Error> {
                 .constraints(vec![Constraint::Percentage(15), Constraint::Percentage(85)])
                 .split(f.size());
             Tabs::default()
-                .block(Block::default().borders(Borders::ALL).title("Interfaces"))
+                .block(Block::default().borders(Borders::ALL).title("Interface"))
                 .titles(&app.tabs.titles)
                 .select(app.tabs.index)
                 .style(Style::default().modifier(Modifier::ITALIC))
