@@ -43,6 +43,9 @@ pub struct App<'a> {
     local_player: LocalPlayer,
     config: Config,
     fmod: Sys,
+    // Change so the MediaUI is stored here. Player instances can communicate with it through a reference
+    // put file/sound logic in MediUI so that if one player is playing and another requests attention
+    // the MediaUI cleanly transitions
 }
 
 // hardcoded input/tick/draw calls because can't figure out how to return a trait object.. jfc
@@ -69,7 +72,7 @@ impl<'a> App<'a> {
             pandora_player: PandoraPlayer::new(config.clone()),
             local_player: LocalPlayer::new(config.clone()),
             config: config,
-            fmod: fmod
+            fmod: fmod,
         }
     }
     

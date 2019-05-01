@@ -100,7 +100,7 @@ impl LocalPlayer {
 impl Player for LocalPlayer {
     fn input(&mut self, key: Key, fmod: &Sys) {
         match key {
-            Key::Char('c') => {
+            Key::Char('s') => {
                 self.playing_channel.as_ref().unwrap().set_paused(true);
                 self.playing_song = None;
             }
@@ -128,12 +128,12 @@ impl Player for LocalPlayer {
                 };
                 self.rebuild_song_list = true;
             }
-            Key::Char('a') => {
+            Key::Char('z') => {
                 if self.playing_song != None {
                     self.playing_channel.as_ref().unwrap().set_position(cmp::max(0, self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as i32 - 10000) as usize, rfmod::TIMEUNIT_MS);
                 }
             }
-            Key::Char('s') => {
+            Key::Char('x') => {
                 if self.playing_song != None {
                     self.playing_channel.as_ref().unwrap().set_position(self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() + 10000, rfmod::TIMEUNIT_MS);
                 }                    

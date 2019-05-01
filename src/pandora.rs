@@ -2,6 +2,7 @@ use pandora_rs2::Pandora;
 use pandora_rs2::stations::Station;
 use pandora_rs2::playlist::Track;
 use rfmod::Sys;
+use std::cmp;
 use std::io;
 use std::fs::File;
 use std::process::Command;
@@ -83,6 +84,14 @@ impl PandoraPlayer {
 
         Ok((dest, mp4_file))
     }
+
+    fn next_track(&mut self, fmod: &Sys) { // assumes a track is playing
+        self.selected_idx = Some(self.selected_idx.unwrap() + 1);
+        let (song_file, file_path) = self.download_track(&self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[self.selected_idx.unwrap()]).expect("Error while downloading track.");
+        let (phandle, pchannel) = LocalPlayer::play_song(fmod, &file_path);
+        self.playing_song_handle = Some(phandle);
+        self.playing_channel = Some(pchannel);
+    }
 }
 
 impl Player for PandoraPlayer {
@@ -134,6 +143,21 @@ impl Player for PandoraPlayer {
                     }
                 }
             }
+            Key::Char('n') => {
+                if !self.viewing_stations {
+                    self.next_track(fmod);
+                }
+            }
+            Key::Char('z') => {
+                if let Some(channel) = &self.playing_channel {
+                    channel.set_position(cmp::max(0, channel.get_position(rfmod::TIMEUNIT_MS).unwrap() as i32 - 10000) as usize, rfmod::TIMEUNIT_MS);
+                }
+            }
+            Key::Char('x') => {
+                if let Some(channel) = &self.playing_channel {
+                    channel.set_position(channel.get_position(rfmod::TIMEUNIT_MS).unwrap() + 10000, rfmod::TIMEUNIT_MS);
+                }                    
+            }
             Key::Down => {
                 if self.viewing_stations { 
                     self.selected_idx = if let Some(selected) = self.selected_idx {
@@ -179,7 +203,10 @@ impl Player for PandoraPlayer {
 
         if !self.viewing_stations {
             match self.selected_idx {
-                Some(selected) => {
+                Some(selected) => { // if song 1 ms from being done play next track
+                    if self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32 >= self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() - 1 {
+                        self.next_track(fmod);
+                    }
                 }
                 None => {
                     self.selected_idx = Some(0);
