@@ -22,7 +22,7 @@ pub struct PandoraPlayer {
     stations: Vec<Station>,
     stations_names: Vec<String>,
     selected_idx: Option<usize>,
-    song_names: Vec<String>,
+    selected_station: Option<usize>,
     viewing_stations: bool,
     rebuild_station_list: bool,
     current_playlist: Option<Vec<Track>>,
@@ -45,7 +45,7 @@ impl PandoraPlayer {
             config: config,
             stations: stations.unwrap(),
             selected_idx: None,
-            song_names: Vec::new(),
+            selected_station: None,
             stations_names: stations_names,
             viewing_stations: true,
             rebuild_station_list: false,
@@ -86,11 +86,43 @@ impl PandoraPlayer {
     }
 
     fn next_track(&mut self, fmod: &Sys) { // assumes a track is playing
-        self.selected_idx = Some(self.selected_idx.unwrap() + 1);
-        let (song_file, file_path) = self.download_track(&self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[self.selected_idx.unwrap()]).expect("Error while downloading track.");
-        let (phandle, pchannel) = LocalPlayer::play_song(fmod, &file_path);
-        self.playing_song_handle = Some(phandle);
-        self.playing_channel = Some(pchannel);
+        if let Some(mut idx) = self.selected_idx {
+            let cur_len = self.current_playlist.as_ref().unwrap().len();
+
+            if cur_len != 0 { // not first iter
+                idx += 1;
+                self.selected_idx = Some(idx);
+            }
+            if idx >= cur_len { // grab next playlist
+                self.next_playlist();
+            }
+            
+            let mut playlist = self.current_playlist.clone().unwrap();
+            let (song_file, file_path) = self.download_track(&playlist[idx]).expect("Error while downloading track.");
+            let (phandle, pchannel) = LocalPlayer::play_song(fmod, &file_path);
+            self.playing_song_handle = Some(phandle);
+            self.playing_channel = Some(pchannel);
+            self.current_playlist = Some(playlist);       
+        }
+    }
+
+    fn next_playlist(&mut self) {
+        let mut playlist = self.current_playlist.clone().unwrap();
+        let station_handle = self.handle.stations();
+        if let Some(idx) = self.selected_station {
+            if let Ok(mut new_playlist) = station_handle.playlist(&self.stations[idx]).list() {
+                let mut track_names: Vec<String> = self.current_playlist_titles.clone().unwrap_or(Vec::new());
+                for s in new_playlist.iter() {
+                    if let Some(title) = &s.song_name {
+                        track_names.push(title.clone());
+                        playlist.push(s.clone());
+                    }
+                }
+                self.current_playlist_titles = Some(track_names);
+                self.viewing_stations = false;
+                self.current_playlist = Some(playlist);
+            }
+        }
     }
 }
 
@@ -109,7 +141,7 @@ impl Player for PandoraPlayer {
                 .render(f, chunks[0]);
         } else if let Some(playlist_titles) = self.current_playlist_titles.as_ref() {
             if let Some(idx) = self.selected_idx {
-                self.media_ui.draw(f, chunk, self.stations_names[idx].as_str(), 
+                self.media_ui.draw(f, chunk, self.stations_names[self.selected_station.unwrap()].as_str(), 
                                              playlist_titles.to_vec(), 
                                              idx, 
                                              self.playing_song_handle.as_ref().unwrap(), 
@@ -121,26 +153,16 @@ impl Player for PandoraPlayer {
     fn input(&mut self, key: Key, fmod: &Sys) {
         let selection_list_length = match self.viewing_stations {
             true => self.stations_names.len(),
-            false => self.song_names.len()
+            false => self.current_playlist_titles.as_ref().unwrap().len()
         };
 
         match key {
             Key::Char(' ') => {
                 if self.viewing_stations {
-                    let station_handle = self.handle.stations();
-                    if let Ok(s) = station_handle.playlist(&self.stations[self.selected_idx.unwrap()]).list() {
-                        self.current_playlist = Some(s);
-                        let mut track_names: Vec<String> = Vec::new();
-                        for s in self.current_playlist.clone().unwrap().iter() { 
-                            track_names.push(match s.song_name.as_ref() {
-                                Some(s) => s.clone(),
-                                None => String::from("Null song")
-                            }); 
-                        }
-                        self.current_playlist_titles = Some(track_names);
-                        self.selected_idx = None;
-                        self.viewing_stations = false;
-                    }
+                    self.current_playlist = Some(Vec::new());
+                    self.selected_station = self.selected_idx;
+                    self.selected_idx = Some(3);
+                    self.next_track(fmod);
                 }
             }
             Key::Char('n') => {
