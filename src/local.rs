@@ -2,7 +2,6 @@ use termion::event::Key;
 use rfmod::Sys;
 use id3::Tag;
 use glob::glob;
-use std::cmp;
 use tui::backend::Backend;
 use tui::widgets::{ Widget, Block, Borders, SelectableList };
 use tui::style::{ Color, Modifier, Style};
@@ -10,7 +9,7 @@ use tui::layout::{ Rect, Layout, Constraint, Direction };
 use tui::terminal::Frame;
 use super::player::Player;
 use super::Config;
-use super::MediaUI;
+use super::MediaPlayer;
 
 struct Song {
     name: String,
@@ -33,9 +32,6 @@ pub struct LocalPlayer {
     playing_song: Option<usize>,
     song_list: Vec<String>,
     rebuild_song_list: bool,
-    playing_song_handle: Option<rfmod::Sound>,
-    playing_channel: Option<rfmod::Channel>,
-    media_ui: MediaUI
 }
 
 impl LocalPlayer {
@@ -52,9 +48,6 @@ impl LocalPlayer {
             playing_song: None,
             song_list: song_list,
             rebuild_song_list: false,
-            playing_song_handle: None,
-            playing_channel: None,
-            media_ui: MediaUI::new()
         }
     }
 
@@ -83,25 +76,13 @@ impl LocalPlayer {
 
         Ok(Playlist { name: songs[0].album.clone(), songs: songs, length: total_length })
     }
-
-    pub fn play_song(fmod: &rfmod::Sys, path: &str) -> (rfmod::Sound, rfmod::Channel) {
-        let playing_song_handle = match fmod.create_sound(path, None, None) {
-            Ok(s) => s,
-            Err(err) => panic!("Error code: {:?}", err)
-        };
-        let playing_channel = match playing_song_handle.play() {
-            Ok(c) => c,
-            Err(err) => panic!("Play: {:?}", err)
-        };
-        (playing_song_handle, playing_channel)
-    }
 }
 
 impl Player for LocalPlayer {
-    fn input(&mut self, key: Key, fmod: &Sys) {
+    fn input(&mut self, key: Key, fmod: &Sys, media_player: &mut MediaPlayer) {
         match key {
             Key::Char('s') => {
-                self.playing_channel.as_ref().unwrap().set_paused(true);
+                media_player.pause();
                 self.playing_song = None;
             }
             Key::Down => {
@@ -130,23 +111,21 @@ impl Player for LocalPlayer {
             }
             Key::Char('z') => {
                 if self.playing_song != None {
-                    self.playing_channel.as_ref().unwrap().set_position(cmp::max(0, self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as i32 - 10000) as usize, rfmod::TIMEUNIT_MS);
+                    media_player.back();
                 }
             }
             Key::Char('x') => {
                 if self.playing_song != None {
-                    self.playing_channel.as_ref().unwrap().set_position(self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() + 10000, rfmod::TIMEUNIT_MS);
+                    media_player.forward();
                 }                    
             }
             Key::Char(' ') => {
                 if self.selected_song != None {
                     if self.selected_song != self.playing_song {
                         self.playing_song = self.selected_song;
-                        let (phandle, pchannel) = LocalPlayer::play_song(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
-                        self.playing_song_handle = Some(phandle);
-                        self.playing_channel = Some(pchannel);
+                        media_player.play_local_file(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
                     } else {
-                        self.playing_channel.as_ref().unwrap().set_paused(!self.playing_channel.as_ref().unwrap().get_paused().unwrap());
+                        media_player.toggle_pause();
                     }
                 }
             }
@@ -154,7 +133,7 @@ impl Player for LocalPlayer {
         }
     }
 
-    fn tick(&mut self, fmod: &Sys) {
+    fn tick(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) {
         // draw > in list
         if self.rebuild_song_list && self.selected_song != None {
             self.song_list.clear();
@@ -167,22 +146,20 @@ impl Player for LocalPlayer {
 
         // go to next song
         if self.playing_song != None {
-            if self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32 >= self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() - 1 {
+            if media_player.almost_over() {
                 self.playing_song = if self.playing_song.unwrap() >= self.song_list.len() - 1 { Some(0) } else { Some(self.playing_song.unwrap() + 1) };
-                let (phandle, pchannel) = LocalPlayer::play_song(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
-                self.playing_song_handle = Some(phandle);
-                self.playing_channel = Some(pchannel);
+                media_player.play_local_file(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
             }
         }
     }
 
-    fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect) {
+    fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect, media_player: &mut MediaPlayer) {
         if let Some(idx) = self.playing_song {
-            self.media_ui.draw(f, chunk, self.playlist.name.as_str(), 
+            media_player.draw(f, chunk, self.playlist.name.as_str(), 
                                          self.song_list.clone(), 
-                                         idx, 
-                                         self.playing_song_handle.as_ref().unwrap(), 
-                                         self.playing_channel.as_ref().unwrap());
+                                         idx,
+                                         String::from(""),
+                                         String::from(""));
         } else {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)

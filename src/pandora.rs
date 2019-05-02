@@ -2,7 +2,6 @@ use pandora_rs2::Pandora;
 use pandora_rs2::stations::Station;
 use pandora_rs2::playlist::Track;
 use rfmod::Sys;
-use std::cmp;
 use std::io;
 use std::fs::File;
 use std::process::Command;
@@ -14,7 +13,7 @@ use tui::terminal::Frame;
 use tui::style::{ Color, Modifier, Style};
 use tempdir::TempDir;
 use super::player::Player;
-use super::{ Config, MediaUI, LocalPlayer };
+use super::{ Config, MediaPlayer, LocalPlayer };
 
 pub struct PandoraPlayer {
     config: Config,
@@ -28,10 +27,7 @@ pub struct PandoraPlayer {
     current_playlist: Option<Vec<Track>>,
     current_playlist_titles: Option<Vec<String>>,
     temp_dir: TempDir,
-    playing_song_handle: Option<rfmod::Sound>,
-    playing_channel: Option<rfmod::Channel>,
-    playing_song_file: Option<File>,
-    media_ui: MediaUI
+    playing_song_file: Option<File>
 }
 
 impl PandoraPlayer {
@@ -52,10 +48,7 @@ impl PandoraPlayer {
             current_playlist: None,
             current_playlist_titles: None,
             temp_dir: TempDir::new("muscli").expect("Couldn't create temp directory"),
-            playing_song_handle: None,
-            playing_channel: None,
             playing_song_file: None,
-            media_ui: MediaUI::new()
         }
     }
 
@@ -85,7 +78,7 @@ impl PandoraPlayer {
         Ok((dest, mp4_file))
     }
 
-    fn next_track(&mut self, fmod: &Sys) { // assumes a track is playing
+    fn next_track(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) { // assumes a track is playing
         if let Some(mut idx) = self.selected_idx {
             let cur_len = self.current_playlist.as_ref().unwrap().len();
 
@@ -99,10 +92,7 @@ impl PandoraPlayer {
             
             let mut playlist = self.current_playlist.clone().unwrap();
             let (song_file, file_path) = self.download_track(&playlist[idx]).expect("Error while downloading track.");
-            let (phandle, pchannel) = LocalPlayer::play_song(fmod, &file_path);
-            self.playing_song_handle = Some(phandle);
-            self.playing_channel = Some(pchannel);
-            self.current_playlist = Some(playlist);       
+            media_player.play_local_file(fmod, &file_path);
         }
     }
 
@@ -127,7 +117,7 @@ impl PandoraPlayer {
 }
 
 impl Player for PandoraPlayer {
-    fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect) {
+    fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect, media_player: &mut MediaPlayer) {
         if self.viewing_stations {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
@@ -141,16 +131,16 @@ impl Player for PandoraPlayer {
                 .render(f, chunks[0]);
         } else if let Some(playlist_titles) = self.current_playlist_titles.as_ref() {
             if let Some(idx) = self.selected_idx {
-                self.media_ui.draw(f, chunk, self.stations_names[self.selected_station.unwrap()].as_str(), 
+                media_player.draw(f, chunk, self.stations_names[self.selected_station.unwrap()].as_str(), 
                                              playlist_titles.to_vec(), 
                                              idx, 
-                                             self.playing_song_handle.as_ref().unwrap(), 
-                                             self.playing_channel.as_ref().unwrap());
+                                             self.current_playlist.as_ref().unwrap()[idx].artist_name.clone().unwrap(),
+                                             self.current_playlist.as_ref().unwrap()[idx].album_name.clone().unwrap());
             }
         }
     }
 
-    fn input(&mut self, key: Key, fmod: &Sys) {
+    fn input(&mut self, key: Key, fmod: &Sys, media_player: &mut MediaPlayer) {
         let selection_list_length = match self.viewing_stations {
             true => self.stations_names.len(),
             false => self.current_playlist_titles.as_ref().unwrap().len()
@@ -161,23 +151,23 @@ impl Player for PandoraPlayer {
                 if self.viewing_stations {
                     self.current_playlist = Some(Vec::new());
                     self.selected_station = self.selected_idx;
-                    self.selected_idx = Some(3);
-                    self.next_track(fmod);
+                    self.selected_idx = Some(0);
+                    self.next_track(fmod, media_player);
                 }
             }
             Key::Char('n') => {
                 if !self.viewing_stations {
-                    self.next_track(fmod);
+                    self.next_track(fmod, media_player);
                 }
             }
             Key::Char('z') => {
-                if let Some(channel) = &self.playing_channel {
-                    channel.set_position(cmp::max(0, channel.get_position(rfmod::TIMEUNIT_MS).unwrap() as i32 - 10000) as usize, rfmod::TIMEUNIT_MS);
+                if !self.viewing_stations {
+                    media_player.back();
                 }
             }
             Key::Char('x') => {
-                if let Some(channel) = &self.playing_channel {
-                    channel.set_position(channel.get_position(rfmod::TIMEUNIT_MS).unwrap() + 10000, rfmod::TIMEUNIT_MS);
+                if !self.viewing_stations {
+                    media_player.forward();
                 }                    
             }
             Key::Down => {
@@ -212,7 +202,7 @@ impl Player for PandoraPlayer {
         }
     }
 
-    fn tick(&mut self, fmod: &Sys) {
+    fn tick(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) {
         // draw > in list
         if self.rebuild_station_list && self.viewing_stations {
             self.stations_names.clear();
@@ -226,17 +216,15 @@ impl Player for PandoraPlayer {
         if !self.viewing_stations {
             match self.selected_idx {
                 Some(selected) => { // if song 1 ms from being done play next track
-                    if self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32 >= self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() - 1 {
-                        self.next_track(fmod);
+                    if media_player.almost_over() {
+                        self.next_track(fmod, media_player);
                     }
                 }
                 None => {
                     self.selected_idx = Some(0);
                     let (song_file, file_path) = self.download_track(&self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[0]).expect("Error while downloading track.");
                     self.playing_song_file = Some(song_file);
-                    let (phandle, pchannel) = LocalPlayer::play_song(fmod, &file_path);
-                    self.playing_song_handle = Some(phandle);
-                    self.playing_channel = Some(pchannel);
+                    media_player.play_local_file(fmod, &file_path);
                 }
             }
         }

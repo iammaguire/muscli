@@ -15,6 +15,7 @@ pub mod local;
 pub mod player;
 
 use std::io;
+use std::process::Command;
 use std::fs::File;
 use rfmod::Sys;
 use termion::raw::{ IntoRawMode };
@@ -29,7 +30,7 @@ use event::{ Event, Events };
 use util::TabsState;
 use pandora::PandoraPlayer;
 use local::LocalPlayer;
-use player::{ Player, MediaUI };
+use player::{ Player, MediaPlayer };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -41,11 +42,9 @@ pub struct App<'a> {
     tabs: TabsState<'a>,
     pandora_player: PandoraPlayer,
     local_player: LocalPlayer,
+    media_player: MediaPlayer,
     config: Config,
-    fmod: Sys,
-    // Change so the MediaUI is stored here. Player instances can communicate with it through a reference
-    // put file/sound logic in MediUI so that if one player is playing and another requests attention
-    // the MediaUI cleanly transitions
+    fmod: Sys
 }
 
 // hardcoded input/tick/draw calls because can't figure out how to return a trait object.. jfc
@@ -71,6 +70,7 @@ impl<'a> App<'a> {
             tabs: TabsState::new(vec!["Local", "Pandora", "Spotify"]),
             pandora_player: PandoraPlayer::new(config.clone()),
             local_player: LocalPlayer::new(config.clone()),
+            media_player: MediaPlayer::new(),
             config: config,
             fmod: fmod,
         }
@@ -88,25 +88,25 @@ impl<'a> App<'a> {
 
     fn input(&mut self, key: Key) {
         if self.tabs.index == 0 {
-            self.local_player.input(key, &self.fmod);
+            self.local_player.input(key, &self.fmod, &mut self.media_player);
         } else {
-            self.pandora_player.input(key, &self.fmod);
+            self.pandora_player.input(key, &self.fmod, &mut self.media_player);
         }
     }
 
     fn tick(&mut self) {
         if self.tabs.index == 0 {
-            self.local_player.tick(&self.fmod);
+            self.local_player.tick(&self.fmod, &mut self.media_player);
         } else {
-            self.pandora_player.tick(&self.fmod);
+            self.pandora_player.tick(&self.fmod, &mut self.media_player);
         }
     }
 
     fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect) {
         if self.tabs.index == 0 {
-            self.local_player.draw(f, chunk);
+            self.local_player.draw(f, chunk, &mut self.media_player);
         } else {
-            self.pandora_player.draw(f, chunk);
+            self.pandora_player.draw(f, chunk, &mut self.media_player);
         }
     }
 }
@@ -117,6 +117,7 @@ fn main() -> Result<(), failure::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    terminal.backend_mut().clear();
     terminal.hide_cursor()?;
 
     loop {
