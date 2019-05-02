@@ -131,7 +131,7 @@ impl Player for PandoraPlayer {
                 .render(f, chunks[0]);
         } else if let Some(playlist_titles) = self.current_playlist_titles.as_ref() {
             if let Some(idx) = self.selected_idx {
-                media_player.draw(f, chunk, self.stations_names[self.selected_station.unwrap()].as_str(), 
+                media_player.draw(f, chunk, &self.stations_names[self.selected_station.unwrap()][2..], 
                                              playlist_titles.to_vec(), 
                                              idx, 
                                              self.current_playlist.as_ref().unwrap()[idx].artist_name.clone().unwrap(),
@@ -169,6 +169,13 @@ impl Player for PandoraPlayer {
                 if !self.viewing_stations {
                     media_player.forward();
                 }                    
+            }
+            Key::Char('s') => {
+                    self.current_playlist = Some(Vec::new());
+                    self.current_playlist_titles = Some(Vec::new());
+                    self.selected_idx = self.selected_station;
+                    media_player.pause();
+                    self.viewing_stations = true;
             }
             Key::Down => {
                 if self.viewing_stations { 
