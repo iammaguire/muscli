@@ -53,7 +53,7 @@ impl PandoraPlayer {
     }
 
     fn download_track(&self, track: &Track) -> Result<(File, String), failure::Error> {
-        let target = track.track_audio.as_ref().expect("Couldn't unwrap track_audio").high_quality.audio_url.clone();
+        let target = track.additional_audio_url.clone().unwrap(); // uses mp3
         let mut response = reqwest::get(&target)?;
 
         let (mut dest, fname) = {
@@ -69,13 +69,8 @@ impl PandoraPlayer {
         };
         io::copy(&mut response, &mut dest)?;
 
-        // Hacky convert mp4 to mp3 until I properly implement an audio backend
-        // ffmpeg -i audio.mp4 -vn -acodec libmp3lame -ac 2 -qscale:a 4 -ar 48000 audio.mp3
-        let mut mp4_file = fname.to_str().unwrap().to_string();
-        Command::new("/usr/bin/sh").args(&["-c", &format!("ffmpeg -i {} -vn -acodec libmp3lame -ac 2 -qscale:a 4 -ar 48000 {}.mp3", &mp4_file, &mp4_file)]).output().expect("Error executing ffmpeg command");
-        mp4_file.push_str(".mp3");
-
-        Ok((dest, mp4_file))
+        let mut mp3_file = fname.to_str().unwrap().to_string();
+        Ok((dest, mp3_file))
     }
 
     fn next_track(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) { // assumes a track is playing
@@ -153,6 +148,8 @@ impl Player for PandoraPlayer {
                     self.selected_station = self.selected_idx;
                     self.selected_idx = Some(0);
                     self.next_track(fmod, media_player);
+                } else {
+                    media_player.toggle_pause();
                 }
             }
             Key::Char('n') => {
