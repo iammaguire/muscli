@@ -42,7 +42,7 @@ impl DirSelect {
                                 if let Some(ext) = os_str_ext.to_str() {
                                     if SUPPORTED_FORMATED.contains(&ext) {
                                         if let Some(file_name) = file.file_name().to_str() {
-                                            self.valid_files.push(String::from(file_name));
+                                            self.valid_files.push(String::from(file_name)); // what even is an error anyways
                                         }
                                     }
                                 }

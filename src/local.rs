@@ -109,12 +109,12 @@ impl Player for LocalPlayer {
                 };
                 self.rebuild_song_list = true;
             }
-            Key::Char('z') => {
+            Key::Char('x') => {
                 if self.playing_song != None {
                     media_player.back();
                 }
             }
-            Key::Char('x') => {
+            Key::Char('z') => {
                 if self.playing_song != None {
                     media_player.forward();
                 }                    

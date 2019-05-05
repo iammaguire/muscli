@@ -157,12 +157,12 @@ impl Player for PandoraPlayer {
                     self.next_track(fmod, media_player);
                 }
             }
-            Key::Char('z') => {
+            Key::Char('x') => {
                 if !self.viewing_stations {
                     media_player.back();
                 }
             }
-            Key::Char('x') => {
+            Key::Char('z') => {
                 if !self.viewing_stations {
                     media_player.forward();
                 }                    
