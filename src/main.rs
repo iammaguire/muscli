@@ -99,7 +99,6 @@ impl<'a> App<'a> {
         let config_file = File::open(config_file_path).expect("Config file not found");
         let mut config: Config = serde_json::from_reader(config_file).expect("Error while reading config file");
         config.pandora_password = String::from_utf8(base64::decode(&config.pandora_password).unwrap()).unwrap();
-        config.pandora_password.pop(); // remove trailing byte, may be unnecessary
         config
     }
 
