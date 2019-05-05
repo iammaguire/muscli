@@ -13,6 +13,7 @@ pub mod event;
 pub mod pandora;
 pub mod local;
 pub mod player;
+pub mod dir_select;
 
 use std::io;
 use std::process::Command;
@@ -31,23 +32,32 @@ use util::TabsState;
 use pandora::PandoraPlayer;
 use local::LocalPlayer;
 use player::{ Player, MediaPlayer };
+use dir_select::DirSelect;
+
+pub const DIR_GUI_CODE:     usize = 444;
+pub const LOCAL_GUI_CODE:   usize = 0;
+pub const PANDORA_GUI_CODE: usize = 1;
+pub const SPOTIFY_GUI_CODE: usize = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
-    username: String,
-    password: String
+    local_dir: String,
+    pandora_username: String,
+    pandora_password: String
 }
 
+// Massive TODO: refactor to composition pattern
 pub struct App<'a> {
     tabs: TabsState<'a>,
     pandora_player: PandoraPlayer,
     local_player: LocalPlayer,
     media_player: MediaPlayer,
+    dir_select: Option<DirSelect>,
     config: Config,
     fmod: Sys
 }
 
-// hardcoded input/tick/draw calls because can't figure out how to return a trait object.. jfc
+// hardcoded input/tick/draw calls because can't figure out how to return a trait object.. stuck in an inheritance mindset
 impl<'a> App<'a> {
     fn new() -> App<'a> {
         let config = App::read_config();
@@ -71,42 +81,59 @@ impl<'a> App<'a> {
             pandora_player: PandoraPlayer::new(config.clone()),
             local_player: LocalPlayer::new(config.clone()),
             media_player: MediaPlayer::new(),
+            dir_select: Some(DirSelect::new()),
             config: config,
             fmod: fmod,
         }
     }
+
+    pub fn rebuild_local_with_dir(&mut self, path: &String) {
+        self.config.local_dir = path.clone();
+        self.local_player = LocalPlayer::new(self.config.clone());
+        self.tabs.index = LOCAL_GUI_CODE;
+    }
     
-    fn read_config() -> Config {
+    fn read_config() -> Config { // TODO add error obj to Config describing failure and show in whichever interface is affected. Also move pandora pass logic to Pandora
         let mut config_file_path = dirs::config_dir().expect("Config directory couldn't be found.");
         config_file_path.push("muscli/config.json");
         let config_file = File::open(config_file_path).expect("Config file not found");
         let mut config: Config = serde_json::from_reader(config_file).expect("Error while reading config file");
-        config.password = String::from_utf8(base64::decode(&config.password).unwrap()).unwrap();
-        config.password.pop(); // remove trailing byte, may be unnecessary
+        config.pandora_password = String::from_utf8(base64::decode(&config.pandora_password).unwrap()).unwrap();
+        config.pandora_password.pop(); // remove trailing byte, may be unnecessary
         config
     }
 
     fn input(&mut self, key: Key) {
-        if self.tabs.index == 0 {
-            self.local_player.input(key, &self.fmod, &mut self.media_player);
-        } else {
-            self.pandora_player.input(key, &self.fmod, &mut self.media_player);
+        match self.tabs.index {
+            LOCAL_GUI_CODE => { self.local_player.input(key, &self.fmod, &mut self.media_player); }
+            PANDORA_GUI_CODE => { self.pandora_player.input(key, &self.fmod, &mut self.media_player); }
+            SPOTIFY_GUI_CODE => {}
+            DIR_GUI_CODE => { 
+                let mut dir_select = self.dir_select.clone().unwrap();
+                dir_select.input(key, self);
+                self.dir_select = Some(dir_select);
+            }
+            _ => {}
         }
     }
 
     fn tick(&mut self) {
-        if self.tabs.index == 0 {
-            self.local_player.tick(&self.fmod, &mut self.media_player);
-        } else {
-            self.pandora_player.tick(&self.fmod, &mut self.media_player);
+        match self.tabs.index {
+            LOCAL_GUI_CODE => { self.local_player.tick(&self.fmod, &mut self.media_player); }
+            PANDORA_GUI_CODE => { self.pandora_player.tick(&self.fmod, &mut self.media_player); }         
+            SPOTIFY_GUI_CODE => {}
+            DIR_GUI_CODE => { self.dir_select.as_mut().unwrap().tick(); }
+            _ => {}    
         }
     }
 
     fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect) {
-        if self.tabs.index == 0 {
-            self.local_player.draw(f, chunk, &mut self.media_player);
-        } else {
-            self.pandora_player.draw(f, chunk, &mut self.media_player);
+        match self.tabs.index {
+            LOCAL_GUI_CODE => { self.local_player.draw(f, chunk, &mut self.media_player); }
+            PANDORA_GUI_CODE => { self.pandora_player.draw(f, chunk, &mut self.media_player); }
+            SPOTIFY_GUI_CODE => {}
+            DIR_GUI_CODE => { self.dir_select.as_mut().unwrap().draw(f, chunk); }
+            _ => {}    
         }
     }
 }
@@ -117,15 +144,25 @@ fn main() -> Result<(), failure::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    terminal.backend_mut().clear();
     terminal.hide_cursor()?;
+    terminal.backend_mut().clear()?;
 
     loop {
         match events.next()? {
             Event::Input(input) => match input {
                 Key::Right => app.tabs.next(),
                 Key::Left => app.tabs.previous(),
-                Key::Char('q') => { break; },
+                Key::Char('d') => {
+                    if app.tabs.index == LOCAL_GUI_CODE {
+                        app.tabs.index = DIR_GUI_CODE;
+                    } else {
+                        app.input(input);
+                    }
+                }
+                Key::Char('q') => { 
+                    if app.tabs.index != DIR_GUI_CODE { break; }
+                    else { app.input(input); }
+                }
                 _ => app.input(input)
             }
             Event::Tick => app.tick()

@@ -32,7 +32,7 @@ pub struct PandoraPlayer {
 
 impl PandoraPlayer {
     pub fn new(config: Config) -> PandoraPlayer {
-        let handle = Pandora::new(&config.username, &config.password).expect("Couldn't initialize pandora.");
+        let handle = Pandora::new(&config.pandora_username, &config.pandora_password).expect("Couldn't initialize pandora.");
         let stations = handle.stations().list();
         let mut stations_names: Vec<String> = Vec::new();
         for s in stations.as_ref().unwrap().iter() { stations_names.push(s.station_name.clone()); }
