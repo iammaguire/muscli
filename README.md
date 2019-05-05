@@ -7,6 +7,7 @@ This uses the pandora-rs2 crate, my updated version of pandora, written by Danie
 Try it out if you'd like however be prepared for crashes and unspecified behavior. This is in a very developmental state.
 
 **Configuration**
+
 Copy the config.json file to .config/muscli/config.json, changing the pandora_username and pandora_password to your 
 pandora username and base64 encoded pandora password. Change local_dir to the full path of a directory containing valid audio files.
 
