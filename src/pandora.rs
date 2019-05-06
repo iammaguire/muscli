@@ -54,14 +54,17 @@ impl PandoraPlayer {
     fn next_track(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) {
         if let Some(mut idx) = self.selected_idx {
             let cur_len = self.current_playlist.as_ref().unwrap().len();
+            
             if cur_len != 0 { // not first iter
                 idx += 1;
                 self.selected_idx = Some(idx);
-            } else if idx >= cur_len || cur_len == 0 {
+            }
+            
+            if idx >= cur_len || cur_len == 0 {
                 self.next_playlist();
             }
 
-            let url = &self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[0].additional_audio_url.clone().unwrap();
+            let url = &self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[idx].additional_audio_url.clone().unwrap();
             media_player.play_from_uri(fmod, &url);
         }
     }
@@ -195,6 +198,10 @@ impl Player for PandoraPlayer {
             if let Some(selected) = self.selected_idx {
                 if media_player.almost_over() { 
                     self.next_track(fmod, media_player);
+                }
+                
+                if *media_player.last_song_title.as_ref().unwrap() != self.current_playlist_titles.as_ref().unwrap()[selected] {
+                    self.next_track(fmod, media_player); // nonworking attempt at context switch
                 }
             }
         }

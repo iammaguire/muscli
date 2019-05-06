@@ -31,13 +31,20 @@ impl DirSelect {
         }
     }
     
-    fn add_file_to_file_list(&mut self, mut prefix: String, file: DirEntry) {
-        if let Some(os_str_ext) = file.path().as_path().extension() {
-            if let Some(ext) = os_str_ext.to_str() {
-                if SUPPORTED_FORMATED.contains(&ext) {
-                    if let Some(file_name) = file.file_name().to_str() {
-                        prefix.push_str(file_name);
-                        self.valid_files.push(prefix);
+    fn add_file_to_file_list(&mut self, file: DirEntry, dir: bool) {
+        if let Some(file_name) = file.file_name().to_str() {
+            if dir {
+                if let Some(file_name) = file.file_name().to_str() {
+                    let mut prefix = String::from("/");
+                    prefix.push_str(file_name);
+                    self.valid_files.push(prefix);
+                } 
+            } else {
+                if let Some(os_str_ext) = file.path().as_path().extension() {
+                    if let Some(ext) = os_str_ext.to_str() {
+                        if SUPPORTED_FORMATED.contains(&ext) {
+                            self.valid_files.push(String::from(file_name));
+                        }
                     }
                 }
             }
@@ -51,9 +58,9 @@ impl DirSelect {
                 if let Ok(file) = file {
                     if let Ok(meta) = file.metadata() {
                         if meta.file_type().is_dir() {
-                            self.add_file_to_file_list(String::from("/"), file);
+                            self.add_file_to_file_list(file, true);
                         } else if meta.file_type().is_file() {
-                            self.add_file_to_file_list(String::from(""), file);
+                            self.add_file_to_file_list(file, false);
                         }
                     }
                 }
@@ -66,9 +73,12 @@ impl DirSelect {
             Key::Char('\n') => {
                 app.rebuild_local_with_dir(&self.input);
             }
+            Key::Char('/') => {
+                self.input.push('/');
+                self.rebuild_file_list();
+            }
             Key::Char(c) => {
                 self.input.push(c);
-                self.rebuild_file_list();
             }
             Key::Backspace => {
                 self.input.pop();

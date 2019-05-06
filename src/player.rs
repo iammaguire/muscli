@@ -14,10 +14,12 @@ pub trait Player {
 }
 
 pub struct MediaPlayer {
-    num_spectrum_bars: usize,
-    spectrum_data_last: Vec<f32>,
-    playing_song_handle: Option<rfmod::Sound>,
-    playing_channel: Option<rfmod::Channel>
+    pub num_spectrum_bars: usize,
+    pub spectrum_data_last: Vec<f32>,
+    pub last_song_title: Option<String>,
+    pub playing_song_handle: Option<rfmod::Sound>,
+    pub playing_channel: Option<rfmod::Channel>,
+    pub playing_song_title: Option<String>
 }
 
 impl MediaPlayer {
@@ -25,8 +27,10 @@ impl MediaPlayer {
           MediaPlayer {
               num_spectrum_bars: 70,
               spectrum_data_last: vec![0f32; 70],
+              last_song_title: None,
               playing_song_handle: None,
-              playing_channel: None
+              playing_channel: None,
+              playing_song_title: None
           }
     }
 
@@ -50,6 +54,10 @@ impl MediaPlayer {
         self.playing_channel.as_ref().unwrap().set_paused(!self.playing_channel.as_ref().unwrap().get_paused().unwrap());
     }
 
+    pub fn set_position(&self, loc: usize) {
+        self.playing_channel.as_ref().unwrap().set_position(loc, rfmod::TIMEUNIT_MS);
+    }
+
     pub fn play_from_uri(&mut self, fmod: &Sys, path: &str) {
         let playing_song_handle = match fmod.create_sound(path, None, None) {
             Ok(s) => s,
@@ -65,6 +73,7 @@ impl MediaPlayer {
     }
 
     pub fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect, list_title: &str, list_member_titles: Vec<String>, selected_idx: usize, artist: String, album: String) {
+        self.playing_song_title = Some(list_member_titles[selected_idx].clone());
         if let Some(playing_channel) = &mut self.playing_channel {
             if let Some(playing_song_handle) = &mut self.playing_song_handle {
                 let chunks = Layout::default()
@@ -120,6 +129,7 @@ impl MediaPlayer {
                     .render(f, player_chunks[2]);
             }
         }
+        self.last_song_title = self.playing_song_title.clone();
     }
 
     fn input(&mut self, key: Key, fmod: &Sys) {
