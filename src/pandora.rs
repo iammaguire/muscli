@@ -1,6 +1,7 @@
 use pandora_rs2::Pandora;
-use pandora_rs2::stations::Station;
-use pandora_rs2::playlist::Track;
+use pandora_rs2::stations::{ ToStationToken, Station };
+use pandora_rs2::playlist::{ ToTrackToken, RateTrackRequest, Playlist, Track };
+use pandora_rs2::method::Method;
 use rfmod::Sys;
 use std::io;
 use std::io::{ Read, ErrorKind, Write };
@@ -73,7 +74,8 @@ impl PandoraPlayer {
         let mut playlist = self.current_playlist.clone().unwrap();
         let station_handle = self.handle.stations();
         if let Some(idx) = self.selected_station {
-            if let Ok(mut new_playlist) = station_handle.playlist(&self.stations[idx]).list() {
+            let current_playlist_handle = Some(station_handle.playlist(&self.stations[idx]));
+            if let Ok(mut new_playlist) = current_playlist_handle.as_ref().unwrap().list() {
                 let mut track_names: Vec<String> = self.current_playlist_titles.clone().unwrap_or(Vec::new());
                 for s in new_playlist.iter() {
                     if let Some(title) = &s.song_name {
@@ -143,6 +145,19 @@ impl Player for PandoraPlayer {
                 if !self.viewing_stations {
                     media_player.forward();
                 }                    
+            }
+            Key::Ctrl('b') => {
+                if !self.viewing_stations {
+                    if let Some(playlist) = self.current_playlist.as_ref() {
+                        let track = &playlist[self.selected_idx.unwrap()];
+                        self.handle.request_noop(Method::StationAddFeedback, Some(serde_json::to_value(RateTrackRequest {
+                                                                                        station_token: self.stations[self.selected_station.unwrap()].to_station_token(),
+                                                                                        track_token: track.to_track_token().unwrap_or("".to_owned()),
+                                                                                        is_positive: false,
+                                                                                    }).unwrap()));
+                        self.next_track(fmod, media_player);
+                    }
+                }
             }
             Key::Char('s') => {
                     self.current_playlist = Some(Vec::new());
