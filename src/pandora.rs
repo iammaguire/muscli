@@ -3,7 +3,9 @@ use pandora_rs2::stations::Station;
 use pandora_rs2::playlist::Track;
 use rfmod::Sys;
 use std::io;
-use std::fs::File;
+use std::io::{ Read, ErrorKind, Write };
+use std::mem;
+use std::fs::{ write, File };
 use std::process::Command;
 use termion::event::Key;
 use tui::backend::Backend;
@@ -11,7 +13,6 @@ use tui::layout::{ Rect, Layout, Constraint, Direction, Alignment };
 use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text };
 use tui::terminal::Frame;
 use tui::style::{ Color, Modifier, Style};
-use tempdir::TempDir;
 use super::player::Player;
 use super::{ Config, MediaPlayer, LocalPlayer };
 
@@ -26,7 +27,6 @@ pub struct PandoraPlayer {
     rebuild_station_list: bool,
     current_playlist: Option<Vec<Track>>,
     current_playlist_titles: Option<Vec<String>>,
-    temp_dir: TempDir,
     playing_song_file: Option<File>
 }
 
@@ -45,49 +45,24 @@ impl PandoraPlayer {
             stations_names: stations_names,
             viewing_stations: true,
             rebuild_station_list: false,
-            current_playlist: None,
-            current_playlist_titles: None,
-            temp_dir: TempDir::new("muscli").expect("Couldn't create temp directory"),
+            current_playlist: Some(Vec::new()),
+            current_playlist_titles: Some(Vec::new()),
             playing_song_file: None,
         }
     }
 
-    fn download_track(&self, track: &Track) -> Result<(File, String), failure::Error> {
-        let target = track.additional_audio_url.clone().unwrap(); // uses mp3
-        let mut response = reqwest::get(&target)?;
-
-        let (mut dest, fname) = {
-            let fname = response
-                .url()
-                .path_segments()
-                .and_then(|segments| segments.last())
-                .and_then(|name| if name.is_empty() { None } else { Some(name) })
-                .unwrap_or("tmp.mp3");
-
-            let fname = self.temp_dir.path().join(fname);
-            (File::create(fname.clone())?, fname)
-        };
-        io::copy(&mut response, &mut dest)?;
-
-        let mut mp3_file = fname.to_str().unwrap().to_string();
-        Ok((dest, mp3_file))
-    }
-
-    fn next_track(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) { // assumes a track is playing
+    fn next_track(&mut self, fmod: &Sys, media_player: &mut MediaPlayer) {
         if let Some(mut idx) = self.selected_idx {
             let cur_len = self.current_playlist.as_ref().unwrap().len();
-
             if cur_len != 0 { // not first iter
                 idx += 1;
                 self.selected_idx = Some(idx);
-            }
-            if idx >= cur_len { // grab next playlist
+            } else if idx >= cur_len || cur_len == 0 {
                 self.next_playlist();
             }
-            
-            let mut playlist = self.current_playlist.clone().unwrap();
-            let (song_file, file_path) = self.download_track(&playlist[idx]).expect("Error while downloading track.");
-            media_player.play_local_file(fmod, &file_path);
+
+            let url = &self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[0].additional_audio_url.clone().unwrap();
+            media_player.play_from_uri(fmod, &url);
         }
     }
 
@@ -144,7 +119,6 @@ impl Player for PandoraPlayer {
         match key {
             Key::Char(' ') => {
                 if self.viewing_stations {
-                    self.current_playlist = Some(Vec::new());
                     self.selected_station = self.selected_idx;
                     self.selected_idx = Some(0);
                     self.next_track(fmod, media_player);
@@ -218,17 +192,9 @@ impl Player for PandoraPlayer {
         }
 
         if !self.viewing_stations {
-            match self.selected_idx {
-                Some(selected) => { // if song 1 ms from being done play next track
-                    if media_player.almost_over() {
-                        self.next_track(fmod, media_player);
-                    }
-                }
-                None => {
-                    self.selected_idx = Some(0);
-                    let (song_file, file_path) = self.download_track(&self.current_playlist.as_ref().expect("Couldn't unwrap current playlist")[0]).expect("Error while downloading track.");
-                    self.playing_song_file = Some(song_file);
-                    media_player.play_local_file(fmod, &file_path);
+            if let Some(selected) = self.selected_idx {
+                if media_player.almost_over() { 
+                    self.next_track(fmod, media_player);
                 }
             }
         }

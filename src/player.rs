@@ -50,7 +50,7 @@ impl MediaPlayer {
         self.playing_channel.as_ref().unwrap().set_paused(!self.playing_channel.as_ref().unwrap().get_paused().unwrap());
     }
 
-    pub fn play_local_file(&mut self, fmod: &Sys, path: &str) {
+    pub fn play_from_uri(&mut self, fmod: &Sys, path: &str) {
         let playing_song_handle = match fmod.create_sound(path, None, None) {
             Ok(s) => s,
             Err(err) => panic!("Error code: {:?}", err)

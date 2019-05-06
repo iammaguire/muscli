@@ -145,7 +145,6 @@ fn main() -> Result<(), failure::Error> {
     let mut terminal = Terminal::new(backend)?;
     terminal.hide_cursor()?;
     terminal.backend_mut().clear()?;
-
     loop {
         match events.next()? {
             Event::Input(input) => match input {

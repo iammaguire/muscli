@@ -123,7 +123,7 @@ impl Player for LocalPlayer {
                 if self.selected_song != None {
                     if self.selected_song != self.playing_song {
                         self.playing_song = self.selected_song;
-                        media_player.play_local_file(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
+                        media_player.play_from_uri(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
                     } else {
                         media_player.toggle_pause();
                     }
@@ -148,7 +148,7 @@ impl Player for LocalPlayer {
         if self.playing_song != None {
             if media_player.almost_over() {
                 self.playing_song = if self.playing_song.unwrap() >= self.song_list.len() - 1 { Some(0) } else { Some(self.playing_song.unwrap() + 1) };
-                media_player.play_local_file(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
+                media_player.play_from_uri(fmod, &self.playlist.songs[self.playing_song.unwrap()].path);
             }
         }
     }

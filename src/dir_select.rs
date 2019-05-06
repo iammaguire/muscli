@@ -1,6 +1,6 @@
 const SUPPORTED_FORMATED: [&str; 15] = ["aiff", "asf", "asx", "dls", "flac", "fsb", "it", "m3u", "mp3", "midi", "mod", "ogg", "pls", "s3m", "wav"];
 
-use std::fs::read_dir;
+use std::fs::{ DirEntry, read_dir };
 use std::path::Path;
 use termion::event::Key;
 use termion::cursor::Goto;
@@ -31,22 +31,29 @@ impl DirSelect {
         }
     }
     
+    fn add_file_to_file_list(&mut self, mut prefix: String, file: DirEntry) {
+        if let Some(os_str_ext) = file.path().as_path().extension() {
+            if let Some(ext) = os_str_ext.to_str() {
+                if SUPPORTED_FORMATED.contains(&ext) {
+                    if let Some(file_name) = file.file_name().to_str() {
+                        prefix.push_str(file_name);
+                        self.valid_files.push(prefix);
+                    }
+                }
+            }
+        }
+    }
+    
     fn rebuild_file_list(&mut self) {
         self.valid_files.clear();
         if let Ok(path) = read_dir(&self.input) { // requires full path, can't use ~/ for now
             for file in path {
                 if let Ok(file) = file {
                     if let Ok(meta) = file.metadata() {
-                        if meta.file_type().is_file() {
-                            if let Some(os_str_ext) = file.path().as_path().extension() {
-                                if let Some(ext) = os_str_ext.to_str() {
-                                    if SUPPORTED_FORMATED.contains(&ext) {
-                                        if let Some(file_name) = file.file_name().to_str() {
-                                            self.valid_files.push(String::from(file_name)); // what even is an error anyways
-                                        }
-                                    }
-                                }
-                            }
+                        if meta.file_type().is_dir() {
+                            self.add_file_to_file_list(String::from("/"), file);
+                        } else if meta.file_type().is_file() {
+                            self.add_file_to_file_list(String::from(""), file);
                         }
                     }
                 }
