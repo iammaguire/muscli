@@ -48,7 +48,7 @@ impl PandoraPlayer {
             rebuild_station_list: false,
             current_playlist: Some(Vec::new()),
             current_playlist_titles: Some(Vec::new()),
-            playing_song_file: None,
+            playing_song_file: None
         }
     }
 

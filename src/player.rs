@@ -106,7 +106,7 @@ impl MediaPlayer {
                 ];
                 
                 let player_chunks = Layout::default()
-                    .constraints([Constraint::Percentage(40), Constraint::Percentage(50), Constraint::Percentage(10)].as_ref())
+                    .constraints([Constraint::Min(7), Constraint::Min(5), Constraint::Length(3)].as_ref())
                     .direction(Direction::Vertical)
                     .split(chunks[0]);
                 BarChart::default()
