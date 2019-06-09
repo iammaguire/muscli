@@ -1,5 +1,6 @@
 {
 	"local_dir": "/home/meet/Music/Logic/Young_Sinatra_Welcome_To_Forever",
 	"pandora_username": "you@you.net",
-	"pandora_password": "cGFzc3dvcmQ=" 
+	"pandora_password": "cGFzc3dvcmQ=", 
+	"genius_token": "genius access token here"
 }

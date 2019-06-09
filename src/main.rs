@@ -14,6 +14,7 @@ pub mod pandora;
 pub mod local;
 pub mod player;
 pub mod dir_select;
+pub mod lyrics;
 
 use std::io;
 use std::process::Command;
@@ -33,6 +34,7 @@ use pandora::PandoraPlayer;
 use local::LocalPlayer;
 use player::{ Player, MediaPlayer };
 use dir_select::DirSelect;
+use lyrics::LyricsGrabber;
 
 pub const DIR_GUI_CODE:     usize = 444;
 pub const LOCAL_GUI_CODE:   usize = 0;
@@ -43,7 +45,8 @@ pub const SPOTIFY_GUI_CODE: usize = 2;
 pub struct Config {
     local_dir: String,
     pandora_username: String,
-    pandora_password: String
+    pandora_password: String,
+    genius_token: String
 }
 
 // Massive TODO: refactor to composition pattern
@@ -80,7 +83,7 @@ impl<'a> App<'a> {
             tabs: TabsState::new(vec!["Local", "Pandora", "Spotify"]),
             pandora_player: PandoraPlayer::new(config.clone()),
             local_player: LocalPlayer::new(config.clone()),
-            media_player: MediaPlayer::new(),
+            media_player: MediaPlayer::new(config.clone()),
             dir_select: Some(DirSelect::new()),
             config: config,
             fmod: fmod,
@@ -179,7 +182,7 @@ fn main() -> Result<(), failure::Error> {
                 .render(&mut f, root_chunks[0]);
 
             app.draw(&mut f, root_chunks[1]);
-        }).unwrap();
+        })?;
     }
     Ok(())
 }

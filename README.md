@@ -8,7 +8,7 @@ Try it out if you'd like however be prepared for crashes and unspecified behavio
 
 **Configuration**
 
-Copy the config.json file to .config/muscli/config.json, changing the pandora_username and pandora_password to your 
+Copy the config.json file to ~/.config/muscli/config.json, changing the pandora_username and pandora_password to your 
 pandora username and base64 encoded pandora password. Change local_dir to the full path of a directory containing valid audio files.
 
 Valid formats are aiff, asf, asx, dls, flac, fsb, it, m3u, mp3, midi, mod, ogg, pls, s3m, and wav.

@@ -10,20 +10,7 @@ use tui::terminal::Frame;
 use super::player::Player;
 use super::Config;
 use super::MediaPlayer;
-
-struct Song {
-    name: String,
-    path: String,
-    artist: String,
-    album: String,
-    length: u32,
-}
-
-struct Playlist {
-    songs: Vec<Song>,
-    name: String,
-    length: u32
-}
+use super::player::{ Song, Playlist };
 
 pub struct LocalPlayer {
     config: Config,

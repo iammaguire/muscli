@@ -6,6 +6,21 @@ use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Par
 use tui::style::{ Color, Modifier, Style};
 use tui::layout::{ Rect, Layout, Constraint, Direction, Alignment };
 use rfmod::Sys;
+use super::{ Config, LyricsGrabber };
+
+pub struct Song {
+    pub name: String,
+    pub path: String,
+    pub artist: String,
+    pub album: String,
+    pub length: u32,
+}
+
+pub struct Playlist {
+    pub songs: Vec<Song>,
+    pub name: String,
+    pub length: u32
+}
 
 pub trait Player {
     fn input(&mut self, key: Key, fmod: &Sys, media_player: &mut MediaPlayer);
@@ -19,18 +34,22 @@ pub struct MediaPlayer {
     pub last_song_title: Option<String>,
     pub playing_song_handle: Option<rfmod::Sound>,
     pub playing_channel: Option<rfmod::Channel>,
-    pub playing_song_title: Option<String>
+    pub playing_song_title: Option<String>,
+    pub playing_song_lyrics: Option<String>,
+    config: Config
 }
 
 impl MediaPlayer {
-    pub fn new() -> MediaPlayer {
+    pub fn new(config: Config) -> MediaPlayer {
           MediaPlayer {
               num_spectrum_bars: 70,
               spectrum_data_last: vec![0f32; 70],
               last_song_title: None,
               playing_song_handle: None,
               playing_channel: None,
-              playing_song_title: None
+              playing_song_title: None,
+              playing_song_lyrics: None,
+              config: config
           }
     }
 
@@ -70,12 +89,17 @@ impl MediaPlayer {
         
         self.playing_song_handle = Some(playing_song_handle);
         self.playing_channel = Some(playing_channel);
+        self.playing_song_lyrics = None;
     }
 
     pub fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect, list_title: &str, list_member_titles: Vec<String>, selected_idx: usize, artist: String, album: String) {
         self.playing_song_title = Some(list_member_titles[selected_idx].clone());
         if let Some(playing_channel) = &mut self.playing_channel {
             if let Some(playing_song_handle) = &mut self.playing_song_handle {
+                if self.playing_song_lyrics == None { // will try to grab every iteration if not found first time, replace this with something better future me, I have responsibilites rn
+                    self.playing_song_lyrics = LyricsGrabber::grab_lyrics(artist.clone(), self.playing_song_title.as_ref().unwrap().to_string(), &self.config.genius_token);
+                }
+
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -103,6 +127,7 @@ impl MediaPlayer {
                 let text_obj = format!("Artist: {}\nAlbum: {}", artist, album);
                 let info_text = [
                     Text::raw(&text_obj),
+                    Text::raw(self.playing_song_lyrics.as_ref().unwrap())
                 ];
                 
                 let player_chunks = Layout::default()
