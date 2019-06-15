@@ -10,14 +10,13 @@ extern crate reqwest;
 
 pub mod util;
 pub mod event;
-pub mod pandora;
+pub mod pandora; 
 pub mod local;
 pub mod player;
 pub mod dir_select;
 pub mod lyrics;
 
 use std::io;
-use std::process::Command;
 use std::fs::File;
 use rfmod::Sys;
 use termion::raw::{ IntoRawMode };

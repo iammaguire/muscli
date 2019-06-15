@@ -23,7 +23,7 @@ pub struct LocalPlayer {
 
 impl LocalPlayer {
     pub fn new(config: Config) -> LocalPlayer {
-        let mut path = config.local_dir.clone();
+        let path = config.local_dir.clone();
         let mut song_list = Vec::new();
         let default_playlist = LocalPlayer::build_playlist_from_directory(&path).unwrap();
         for s in &default_playlist.songs { song_list.push(s.name.clone()); }

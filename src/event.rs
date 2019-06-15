@@ -61,7 +61,7 @@ impl Events {
                 let tx = tx.clone();
                 loop {
                     match tx.send(Event::Tick) {
-                        Ok(e) => { thread::sleep(config.tick_rate); }
+                        Ok(_) => { thread::sleep(config.tick_rate); }
                         _ => {}
                     };
                 }

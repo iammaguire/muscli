@@ -1,21 +1,17 @@
 use pandora_rs2::Pandora;
 use pandora_rs2::stations::{ ToStationToken, Station };
-use pandora_rs2::playlist::{ ToTrackToken, RateTrackRequest, Playlist, Track };
+use pandora_rs2::playlist::{ ToTrackToken, RateTrackRequest, Track };
 use pandora_rs2::method::Method;
 use rfmod::Sys;
-use std::io;
-use std::io::{ Read, ErrorKind, Write };
-use std::mem;
-use std::fs::{ write, File };
-use std::process::Command;
+use std::fs::{ File };
 use termion::event::Key;
 use tui::backend::Backend;
-use tui::layout::{ Rect, Layout, Constraint, Direction, Alignment };
-use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text };
+use tui::layout::{ Rect, Layout, Constraint, Direction };
+use tui::widgets::{ Widget, Block, Borders, SelectableList };
 use tui::terminal::Frame;
-use tui::style::{ Color, Modifier, Style};
+use tui::style::{ Color, Style};
 use super::player::Player;
-use super::{ Config, MediaPlayer, LocalPlayer };
+use super::{ Config, MediaPlayer };
 
 pub struct PandoraPlayer {
     config: Config,
@@ -28,7 +24,6 @@ pub struct PandoraPlayer {
     rebuild_station_list: bool,
     current_playlist: Option<Vec<Track>>,
     current_playlist_titles: Option<Vec<String>>,
-    playing_song_file: Option<File>
 }
 
 impl PandoraPlayer {
@@ -48,7 +43,6 @@ impl PandoraPlayer {
             rebuild_station_list: false,
             current_playlist: Some(Vec::new()),
             current_playlist_titles: Some(Vec::new()),
-            playing_song_file: None
         }
     }
 
@@ -75,7 +69,7 @@ impl PandoraPlayer {
         let station_handle = self.handle.stations();
         if let Some(idx) = self.selected_station {
             let current_playlist_handle = Some(station_handle.playlist(&self.stations[idx]));
-            if let Ok(mut new_playlist) = current_playlist_handle.as_ref().unwrap().list() {
+            if let Ok(new_playlist) = current_playlist_handle.as_ref().unwrap().list() {
                 let mut track_names: Vec<String> = self.current_playlist_titles.clone().unwrap_or(Vec::new());
                 for s in new_playlist.iter() {
                     if let Some(title) = &s.song_name {

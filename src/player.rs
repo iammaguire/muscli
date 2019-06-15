@@ -62,7 +62,12 @@ impl MediaPlayer {
     }
 
     pub fn almost_over(&self) -> bool {
-        self.playing_channel.as_ref().unwrap().get_position(rfmod::TIMEUNIT_MS).unwrap() as u32 >= self.playing_song_handle.as_ref().unwrap().get_length(rfmod::TIMEUNIT_MS).unwrap() - 5
+        if let (Some(channel), Some(song_handle)) = (&self.playing_channel, &self.playing_song_handle) {
+            if let (Ok(position_ms), Ok(song_length_ms)) = (channel.get_position(rfmod::TIMEUNIT_MS), song_handle.get_length(rfmod::TIMEUNIT_MS)) {
+                return (position_ms as u32) >= (song_length_ms as u32) - 5
+            }
+        }
+        true
     }
 
     pub fn pause(&self) {
@@ -157,11 +162,11 @@ impl MediaPlayer {
         self.last_song_title = self.playing_song_title.clone();
     }
 
-    fn input(&mut self, key: Key, fmod: &Sys) {
+    fn input(&mut self, _key: Key, _fmod: &Sys) {
 
     }
 
-    fn tick(&mut self, fmod: &Sys) {
+    fn tick(&mut self, _fmod: &Sys) {
 
     }
 }

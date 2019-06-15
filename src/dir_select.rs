@@ -1,20 +1,12 @@
 const SUPPORTED_FORMATED: [&str; 15] = ["aiff", "asf", "asx", "dls", "flac", "fsb", "it", "m3u", "mp3", "midi", "mod", "ogg", "pls", "s3m", "wav"];
 
 use std::fs::{ DirEntry, read_dir };
-use std::path::Path;
 use termion::event::Key;
-use termion::cursor::Goto;
-use rfmod::Sys;
-use id3::Tag;
-use glob::glob;
-use tui::Terminal;
 use tui::backend::Backend;
 use tui::widgets::{ Widget, Block, Borders, Paragraph, Text, List };
-use tui::style::{ Color, Modifier, Style};
+use tui::style::{ Color, Style};
 use tui::layout::{ Rect, Layout, Constraint, Direction };
 use tui::terminal::Frame;
-use super::Config;
-use super::MediaPlayer;
 use super::App;
 
 #[derive(Clone)]
@@ -100,7 +92,7 @@ impl DirSelect {
             .style(Style::default().fg(Color::Yellow))
             .block(Block::default().borders(Borders::ALL).title("Input"))
             .render(f, chunks[0]);
-        let messages = self.valid_files.iter().enumerate().map(|(i, m)| Text::raw(format!("{}", m)));
+        let messages = self.valid_files.iter().enumerate().map(|(_i, m)| Text::raw(format!("{}", m)));
         List::new(messages)
             .block(Block::default().borders(Borders::ALL))
             .render(f, chunks[1]);
