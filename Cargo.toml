@@ -9,7 +9,6 @@ id3 = "0.3.0"
 glob = "0.3.0"
 failure = "0.1.5"
 fmod = "0.10.1"
-pandora-rs2 = "0.1.6"
 dirs = "1.0.5"
 base64 = "0.10.1"
 serde = "1.0.90"
@@ -17,9 +16,10 @@ serde_derive = "1.0.90"
 serde_json = "1.0.39"
 reqwest = "0.9.16"
 select = "0.4.2"
-crossterm = "^0.9"
+pandora-rs2 = "0.1.7"
+easycurses = "0.12.2"
 
 [dependencies.tui]
 version = "0.5.1"
 default-features = false
-features = ["crossterm"]
+features = ["curses"]

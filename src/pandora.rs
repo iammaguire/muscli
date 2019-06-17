@@ -3,8 +3,7 @@ use pandora_rs2::stations::{ ToStationToken, Station };
 use pandora_rs2::playlist::{ ToTrackToken, RateTrackRequest, Track };
 use pandora_rs2::method::Method;
 use rfmod::Sys;
-use std::fs::{ File };
-use crossterm::KeyEvent;
+use easycurses::Input;
 use tui::backend::Backend;
 use tui::layout::{ Rect, Layout, Constraint, Direction };
 use tui::widgets::{ Widget, Block, Borders, SelectableList };
@@ -109,14 +108,14 @@ impl Player for PandoraPlayer {
         }
     }
 
-    fn input(&mut self, key: KeyEvent, fmod: &Sys, media_player: &mut MediaPlayer) {
+    fn input(&mut self, key: Input, fmod: &Sys, media_player: &mut MediaPlayer) {
         let selection_list_length = match self.viewing_stations {
             true => self.stations_names.len(),
             false => self.current_playlist_titles.as_ref().unwrap().len()
         };
 
         match key {
-            KeyEvent::Char(' ') => {
+            Input::Character(' ') => {
                 if self.viewing_stations {
                     self.selected_station = self.selected_idx;
                     self.selected_idx = Some(0);
@@ -125,22 +124,22 @@ impl Player for PandoraPlayer {
                     media_player.toggle_pause();
                 }
             }
-            KeyEvent::Char('n') => {
+            Input::Character('n') => {
                 if !self.viewing_stations {
                     self.next_track(fmod, media_player);
                 }
             }
-            KeyEvent::Char('x') => {
+            Input::Character('x') => {
                 if !self.viewing_stations {
                     media_player.back();
                 }
             }
-            KeyEvent::Char('z') => {
+            Input::Character('z') => {
                 if !self.viewing_stations {
                     media_player.forward();
                 }                    
             }
-            KeyEvent::Ctrl('b') => {
+            Input::Character('b') => {
                 if !self.viewing_stations {
                     if let Some(playlist) = self.current_playlist.as_ref() {
                         let track = &playlist[self.selected_idx.unwrap()];
@@ -153,14 +152,14 @@ impl Player for PandoraPlayer {
                     }
                 }
             }
-            KeyEvent::Char('s') => {
+            Input::Character('s') => {
                     self.current_playlist = Some(Vec::new());
                     self.current_playlist_titles = Some(Vec::new());
                     self.selected_idx = self.selected_station;
                     media_player.pause();
                     self.viewing_stations = true;
             }
-            KeyEvent::Down => {
+            Input::KeyDown => {
                 if self.viewing_stations { 
                     self.selected_idx = if let Some(selected) = self.selected_idx {
                         if selected >= selection_list_length - 1 {
@@ -174,7 +173,7 @@ impl Player for PandoraPlayer {
                     self.rebuild_station_list = true; 
                 }
             }
-            KeyEvent::Up => {
+            Input::KeyUp => {
                 if self.viewing_stations { 
                     self.selected_idx = if let Some(selected) = self.selected_idx {
                         if selected > 0 {

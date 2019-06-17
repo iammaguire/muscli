@@ -9,7 +9,6 @@ extern crate base64;
 extern crate reqwest; 
 
 pub mod util;
-pub mod event;
 pub mod pandora; 
 pub mod local;
 pub mod player;
@@ -18,16 +17,16 @@ pub mod lyrics;
 
 use std::io;
 use std::fs::File;
+use std::time::{Duration, Instant};
 use rfmod::Sys;
-use crossterm::{ AlternateScreen, KeyEvent };
+use easycurses::Input;
 use tui::Terminal;
 use tui::backend::Backend;
-use tui::backend::CrosstermBackend;
+use tui::backend::CursesBackend;
 use tui::widgets::{ Widget, Block, Borders, Tabs };
 use tui::layout::{ Rect, Layout, Constraint, Direction };
 use tui::style::{ Modifier, Style};
 use tui::terminal::Frame;
-use event::{ Event, Events };
 use util::TabsState;
 use pandora::PandoraPlayer;
 use local::LocalPlayer;
@@ -105,7 +104,7 @@ impl<'a> App<'a> {
         config
     }
 
-    fn input(&mut self, key: KeyEvent) {
+    fn input(&mut self, key: Input) {
         match self.tabs.index {
             LOCAL_GUI_CODE => { self.local_player.input(key, &self.fmod, &mut self.media_player); }
             PANDORA_GUI_CODE => { self.pandora_player.input(key, &self.fmod, &mut self.media_player); }
@@ -142,30 +141,38 @@ impl<'a> App<'a> {
 
 fn main() -> Result<(), failure::Error> {
     let mut app = App::new();
-    let events = Events::new();
-    let backend = CrosstermBackend::new();
+    let mut backend = CursesBackend::new().ok_or(io::Error::new(io::ErrorKind::Other, ""))?;
+    let curses = backend.get_curses_mut();
+    curses.set_echo(false);
+    curses.set_input_timeout(easycurses::TimeoutMode::WaitUpTo(50));
+    curses.set_input_mode(easycurses::InputMode::Character);
+    curses.set_keypad_enabled(true);
     let mut terminal = Terminal::new(backend)?;
     terminal.hide_cursor()?;
     terminal.backend_mut().clear()?;
+    
+    let mut last_tick = Instant::now();
+    let tick_rate = Duration::from_millis(250); // 75?
+    
     loop {
-        match events.next()? {
-            Event::Input(input) => match input {
-                KeyEvent::Right => app.tabs.next(),
-                KeyEvent::Left => app.tabs.previous(),
-                KeyEvent::Char('d') => {
+        match terminal.backend_mut().get_curses_mut().get_input() {
+            Some(input) => match input {
+                Input::KeyRight => app.tabs.next(),
+                Input::KeyLeft => app.tabs.previous(),
+                Input::Character('d') => {
                     if app.tabs.index == LOCAL_GUI_CODE {
                         app.tabs.index = DIR_GUI_CODE;
                     } else {
                         app.input(input);
                     }
                 }
-                KeyEvent::Char('q') => { 
+                Input::Character('q') => { 
                     if app.tabs.index != DIR_GUI_CODE { break; }
                     else { app.input(input); }
                 }
                 _ => app.input(input)
             }
-            Event::Tick => app.tick()
+            _ => {}
         }
 
         terminal.draw(|mut f| {

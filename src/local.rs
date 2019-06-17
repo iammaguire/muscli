@@ -1,4 +1,4 @@
-use crossterm::KeyEvent;
+use easycurses::Input;
 use rfmod::Sys;
 use id3::Tag;
 use glob::glob;
@@ -66,13 +66,13 @@ impl LocalPlayer {
 }
 
 impl Player for LocalPlayer {
-    fn input(&mut self, key: KeyEvent, fmod: &Sys, media_player: &mut MediaPlayer) {
+    fn input(&mut self, key: Input, fmod: &Sys, media_player: &mut MediaPlayer) {
         match key {
-            KeyEvent::Char('s') => {
+            Input::Character('s') => {
                 media_player.pause();
                 self.playing_song = None;
             }
-            KeyEvent::Down => {
+            Input::KeyDown => {
                 self.selected_song = if let Some(selected) = self.selected_song {
                     if selected >= self.song_list.len() - 1 {
                         Some(0)
@@ -84,7 +84,7 @@ impl Player for LocalPlayer {
                 };
                 self.rebuild_song_list = true;
             }
-            KeyEvent::Up => {
+            Input::KeyUp => {
                 self.selected_song = if let Some(selected) = self.selected_song {
                     if selected > 0 {
                         Some(selected - 1)
@@ -96,17 +96,17 @@ impl Player for LocalPlayer {
                 };
                 self.rebuild_song_list = true;
             }
-            KeyEvent::Char('x') => {
+            Input::Character('x') => {
                 if self.playing_song != None {
                     media_player.back();
                 }
             }
-            KeyEvent::Char('z') => {
+            Input::Character('z') => {
                 if self.playing_song != None {
                     media_player.forward();
                 }                    
             }
-            KeyEvent::Char(' ') => {
+            Input::Character(' ') => {
                 if self.selected_song != None {
                     if self.selected_song != self.playing_song {
                         self.playing_song = self.selected_song;
