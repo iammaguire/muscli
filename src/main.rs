@@ -19,10 +19,10 @@ pub mod lyrics;
 use std::io;
 use std::fs::File;
 use rfmod::Sys;
-use termion::raw::{ IntoRawMode };
-use termion::event::Key;
+use crossterm::{ AlternateScreen, KeyEvent };
 use tui::Terminal;
-use tui::backend::{ Backend, TermionBackend };
+use tui::backend::Backend;
+use tui::backend::CrosstermBackend;
 use tui::widgets::{ Widget, Block, Borders, Tabs };
 use tui::layout::{ Rect, Layout, Constraint, Direction };
 use tui::style::{ Modifier, Style};
@@ -97,6 +97,7 @@ impl<'a> App<'a> {
     
     fn read_config() -> Config { // TODO add error obj to Config describing failure and show in whichever interface is affected. Also move pandora pass logic to Pandora
         let mut config_file_path = dirs::config_dir().expect("Config directory couldn't be found.");
+        println!("{:?}", &config_file_path);
         config_file_path.push("muscli/config.json");
         let config_file = File::open(config_file_path).expect("Config file not found");
         let mut config: Config = serde_json::from_reader(config_file).expect("Error while reading config file");
@@ -104,7 +105,7 @@ impl<'a> App<'a> {
         config
     }
 
-    fn input(&mut self, key: Key) {
+    fn input(&mut self, key: KeyEvent) {
         match self.tabs.index {
             LOCAL_GUI_CODE => { self.local_player.input(key, &self.fmod, &mut self.media_player); }
             PANDORA_GUI_CODE => { self.pandora_player.input(key, &self.fmod, &mut self.media_player); }
@@ -142,24 +143,23 @@ impl<'a> App<'a> {
 fn main() -> Result<(), failure::Error> {
     let mut app = App::new();
     let events = Events::new();
-    let stdout = io::stdout().into_raw_mode()?;
-    let backend = TermionBackend::new(stdout);
+    let backend = CrosstermBackend::new();
     let mut terminal = Terminal::new(backend)?;
     terminal.hide_cursor()?;
     terminal.backend_mut().clear()?;
     loop {
         match events.next()? {
             Event::Input(input) => match input {
-                Key::Right => app.tabs.next(),
-                Key::Left => app.tabs.previous(),
-                Key::Char('d') => {
+                KeyEvent::Right => app.tabs.next(),
+                KeyEvent::Left => app.tabs.previous(),
+                KeyEvent::Char('d') => {
                     if app.tabs.index == LOCAL_GUI_CODE {
                         app.tabs.index = DIR_GUI_CODE;
                     } else {
                         app.input(input);
                     }
                 }
-                Key::Char('q') => { 
+                KeyEvent::Char('q') => { 
                     if app.tabs.index != DIR_GUI_CODE { break; }
                     else { app.input(input); }
                 }

@@ -1,7 +1,7 @@
 const SUPPORTED_FORMATED: [&str; 15] = ["aiff", "asf", "asx", "dls", "flac", "fsb", "it", "m3u", "mp3", "midi", "mod", "ogg", "pls", "s3m", "wav"];
 
 use std::fs::{ DirEntry, read_dir };
-use termion::event::Key;
+use crossterm::KeyEvent;
 use tui::backend::Backend;
 use tui::widgets::{ Widget, Block, Borders, Paragraph, Text, List };
 use tui::style::{ Color, Style};
@@ -60,19 +60,19 @@ impl DirSelect {
         }
     }
 
-    pub fn input(&mut self, key: Key, app: &mut App) {
+    pub fn input(&mut self, key: KeyEvent, app: &mut App) {
         match key {
-            Key::Char('\n') => {
+            KeyEvent::Char('\n') => {
                 app.rebuild_local_with_dir(&self.input);
             }
-            Key::Char('/') => {
+            KeyEvent::Char('/') => {
                 self.input.push('/');
                 self.rebuild_file_list();
             }
-            Key::Char(c) => {
+            KeyEvent::Char(c) => {
                 self.input.push(c);
             }
-            Key::Backspace => {
+            KeyEvent::Backspace => {
                 self.input.pop();
                 self.rebuild_file_list();
             }

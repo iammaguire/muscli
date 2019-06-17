@@ -1,5 +1,5 @@
 use std::cmp;
-use termion::event::Key;
+use crossterm::KeyEvent;
 use tui::terminal::Frame;
 use tui::backend::Backend;
 use tui::widgets::{ Widget, Block, Borders, SelectableList, Gauge, BarChart, Paragraph, Text };
@@ -23,7 +23,7 @@ pub struct Playlist {
 }
 
 pub trait Player {
-    fn input(&mut self, key: Key, fmod: &Sys, media_player: &mut MediaPlayer);
+    fn input(&mut self, key: KeyEvent, fmod: &Sys, media_player: &mut MediaPlayer);
     fn tick(&mut self, fmod: &Sys, media_player: &mut MediaPlayer);
     fn draw<B: Backend>(&mut self, f: &mut Frame<B>, chunk: Rect, media_player: &mut MediaPlayer);
 }
@@ -162,7 +162,7 @@ impl MediaPlayer {
         self.last_song_title = self.playing_song_title.clone();
     }
 
-    fn input(&mut self, _key: Key, _fmod: &Sys) {
+    fn input(&mut self, _key: KeyEvent, _fmod: &Sys) {
 
     }
 

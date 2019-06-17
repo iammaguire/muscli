@@ -3,31 +3,30 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use termion::event::Key;
-use termion::input::TermRead;
+use crossterm::{input, InputEvent, KeyEvent};
 
 pub enum Event<I> {
     Input(I),
     Tick,
 }
 
-/// A small event handler that wrap termion input and tick events. Each event
+/// A small event handler that wrap input and tick events. Each event
 /// type is handled in its own thread and returned to a common `Receiver`
 pub struct Events {
-    rx: mpsc::Receiver<Event<Key>>,
+    rx: mpsc::Receiver<Event<KeyEvent>>,
     input_handle: thread::JoinHandle<()>,
     tick_handle: thread::JoinHandle<()>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
-    pub tick_rate: Duration,
+    pub tick_rate: u64,
 }
 
 impl Default for Config {
     fn default() -> Config {
         Config {
-            tick_rate: Duration::from_millis(75),
+            tick_rate: 75,
         }
     }
 }
@@ -38,19 +37,24 @@ impl Events {
     }
 
     pub fn with_config(config: Config) -> Events {
+
         let (tx, rx) = mpsc::channel();
         let input_handle = {
             let tx = tx.clone();
             thread::spawn(move || {
-                let stdin = io::stdin();
-                for evt in stdin.keys() {
-                    match evt {
-                        Ok(key) => {
+                let input = input();
+                let reader = input.read_sync();
+                for event in reader {
+                    match event {
+                        InputEvent::Keyboard(key) => {
                             if let Err(_) = tx.send(Event::Input(key)) {
                                 return;
                             }
+                            if key == KeyEvent::Char('q') {
+                                return;
+                            }
                         }
-                        Err(_) => {}
+                        _ => {}
                     }
                 }
             })
@@ -60,10 +64,8 @@ impl Events {
             thread::spawn(move || {
                 let tx = tx.clone();
                 loop {
-                    match tx.send(Event::Tick) {
-                        Ok(_) => { thread::sleep(config.tick_rate); }
-                        _ => {}
-                    };
+                    tx.send(Event::Tick).unwrap();
+                    thread::sleep(Duration::from_millis(config.tick_rate));
                 }
             })
         };
@@ -74,7 +76,7 @@ impl Events {
         }
     }
 
-    pub fn next(&self) -> Result<Event<Key>, mpsc::RecvError> {
+    pub fn next(&self) -> Result<Event<KeyEvent>, mpsc::RecvError> {
         self.rx.recv()
     }
 }
