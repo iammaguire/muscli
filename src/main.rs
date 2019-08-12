@@ -7,6 +7,7 @@ extern crate serde_json;
 extern crate dirs;
 extern crate base64;
 extern crate reqwest; 
+extern crate rspotify;
 
 pub mod util;
 pub mod event;
@@ -15,6 +16,7 @@ pub mod local;
 pub mod player;
 pub mod dir_select;
 pub mod lyrics;
+pub mod spotify;
 
 use std::io;
 use std::fs::File;
@@ -34,6 +36,7 @@ use local::LocalPlayer;
 use player::{ Player, MediaPlayer };
 use dir_select::DirSelect;
 use lyrics::LyricsGrabber;
+use spotify::SpotifyPlayer;
 
 pub const DIR_GUI_CODE:     usize = 444;
 pub const LOCAL_GUI_CODE:   usize = 0;
@@ -63,7 +66,7 @@ pub struct App<'a> {
 impl<'a> App<'a> {
     fn new() -> App<'a> {
         let config = App::read_config();
-
+        //let spotify = SpotifyPlayer::new(config.clone());
         let fmod = match rfmod::Sys::new() {
             Ok(f) => f,
             Err(e) => {

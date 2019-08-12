@@ -62,7 +62,7 @@ impl MediaPlayer {
     }
 
     pub fn almost_over(&self) -> bool {
-        if let (Some(channel), Some(song_handle)) = (&self.playing_channel, &self.playing_song_handle) {
+        if let (Some(channel), Some(song_handle)) = (self.playing_channel.as_ref(), self.playing_song_handle.as_ref()) {
             if let (Ok(position_ms), Ok(song_length_ms)) = (channel.get_position(rfmod::TIMEUNIT_MS), song_handle.get_length(rfmod::TIMEUNIT_MS)) {
                 return (position_ms as u32) >= (song_length_ms as u32) - 5
             }
@@ -102,7 +102,7 @@ impl MediaPlayer {
         if let Some(playing_channel) = &mut self.playing_channel {
             if let Some(playing_song_handle) = &mut self.playing_song_handle {
                 if self.playing_song_lyrics == None { // will try to grab every iteration if not found first time, replace this with something better future me, I have responsibilites rn
-                    self.playing_song_lyrics = LyricsGrabber::grab_lyrics(artist.clone(), self.playing_song_title.as_ref().unwrap().to_string(), &self.config.genius_token);
+                    self.playing_song_lyrics = Some(String::new()); //LyricsGrabber::grab_lyrics(artist.clone(), self.playing_song_title.as_ref().unwrap().to_string(), &self.config.genius_token);
                 }
 
                 let chunks = Layout::default()
@@ -132,7 +132,10 @@ impl MediaPlayer {
                 let text_obj = format!("Artist: {}\nAlbum: {}", artist, album);
                 let info_text = [
                     Text::raw(&text_obj),
-                    Text::raw(self.playing_song_lyrics.as_ref().unwrap())
+                    Text::raw(match &self.playing_song_lyrics {
+                        Some(lyrics) => lyrics,
+                        None => ""
+                    })
                 ];
                 
                 let player_chunks = Layout::default()

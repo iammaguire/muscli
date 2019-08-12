@@ -40,14 +40,16 @@ impl LyricsGrabber {
                 match response.meta.status { 
                     200 => {
                         let lyrics_url = &response.response.hits[0].result.url;
-                        let resp = reqwest::get(lyrics_url).unwrap();
-                        let document = Document::from_read(resp).unwrap();
-                        let mut lyrics = String::new();
-                        
-                        for n in document.find(Class("lyrics")) {
-                            lyrics.push_str(&n.text());
+                        if let Ok(resp) = reqwest::get(lyrics_url) {
+                            let document = Document::from_read(resp).unwrap();
+                            let mut lyrics = String::new();
+                            
+                            for n in document.find(Class("lyrics")) {
+                                lyrics.push_str(&n.text());
+                            }
+                            return Some(lyrics);
                         }
-                        Some(lyrics)
+                        None
                     }
                     _ => None
                 }

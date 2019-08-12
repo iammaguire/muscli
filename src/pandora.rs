@@ -3,7 +3,6 @@ use pandora_rs2::stations::{ ToStationToken, Station };
 use pandora_rs2::playlist::{ ToTrackToken, RateTrackRequest, Track };
 use pandora_rs2::method::Method;
 use rfmod::Sys;
-use std::fs::{ File };
 use termion::event::Key;
 use tui::backend::Backend;
 use tui::layout::{ Rect, Layout, Constraint, Direction };
